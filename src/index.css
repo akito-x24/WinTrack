@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --fp-bg:      #0d0f14;
+    --fp-surface: #13161e;
+    --fp-card:    #1a1e28;
+    --fp-border:  #252a36;
+    --fp-accent:  #3b82f6;
+  }
+}
+
+@layer components {
+  .fp-card {
+    @apply bg-fp-card border border-fp-border rounded-xl p-5;
+  }
+  .fp-card-sm {
+    @apply bg-fp-card border border-fp-border rounded-lg p-4;
+  }
+  .fp-btn {
+    @apply px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer;
+  }
+  .fp-btn-primary {
+    @apply fp-btn bg-fp-accent text-white hover:opacity-90;
+  }
+  .fp-btn-ghost {
+    @apply fp-btn bg-transparent text-fp-muted hover:text-fp-text hover:bg-fp-border;
+  }
+  .fp-label {
+    @apply text-xs font-medium text-fp-muted uppercase tracking-wider;
+  }
+  .fp-value {
+    @apply text-2xl font-semibold text-fp-text;
+  }
+}

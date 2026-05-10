@@ -1,0 +1,26 @@
+# Auto-detect text files and perform LF normalization
+* text=auto
+
+# Force specific file types to use LF (Unix-style)
+*.rs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.exe binary
+*.dll binary
+*.pdb binary
+*.msi binary

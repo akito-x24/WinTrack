@@ -1,0 +1,31 @@
+# ── Dependencies & Builds ─────────────────────────────────────
+node_modules/
+dist/
+build/
+
+# ── Rust / Tauri ──────────────────────────────────────────────
+src-tauri/target/
+target/
+*.rs.bk
+
+# ── Database & User Data (Never commit these!) ────────────────
+*.db
+*.sqlite
+*.sqlite3
+focuspulse.db
+*.log
+
+# ── OS & IDE ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# ── Environment & Temp ────────────────────────────────────────
+.env
+.env.*
+*.tmp
+*.bak

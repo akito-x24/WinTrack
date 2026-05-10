@@ -1,0 +1,289 @@
+use std::sync::{Arc, Mutex};
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+};
+use tauri_plugin_autostart::MacosLauncher;
+
+mod monitoring;
+mod database;
+mod services;
+mod tray;
+mod export;
+
+pub use database::Database;
+pub use services::AppState;
+
+// ─── Tauri Commands ───────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn get_today_stats(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_today_stats().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_daily_usage(state: tauri::State<'_, Arc<Mutex<AppState>>>, date: String) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_daily_usage(&date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_weekly_usage(state: tauri::State<'_, Arc<Mutex<AppState>>>, start_date: String) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_weekly_usage(&start_date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_monthly_usage(state: tauri::State<'_, Arc<Mutex<AppState>>>, year: i32, month: u32) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_monthly_usage(year, month).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_app_list(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_all_apps().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_app_category(state: tauri::State<'_, Arc<Mutex<AppState>>>, app_id: i64, category: String) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.update_app_category(app_id, &category).map_err(|e| e.to_string())
+}
+
+/// Rename an app's display name. Rejects empty strings.
+#[tauri::command]
+async fn update_app_display_name(state: tauri::State<'_, Arc<Mutex<AppState>>>, app_id: i64, display_name: String) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.update_app_display_name(app_id, &display_name).map_err(|e| e.to_string())
+}
+
+/// Set whether an app is ignored by the tracker.
+#[tauri::command]
+async fn set_app_ignored(state: tauri::State<'_, Arc<Mutex<AppState>>>, app_id: i64, ignored: bool) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.set_app_ignored(app_id, ignored).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_hourly_heatmap(state: tauri::State<'_, Arc<Mutex<AppState>>>, date: String) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_hourly_heatmap(&date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_settings(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn update_settings(state: tauri::State<'_, Arc<Mutex<AppState>>>, settings: serde_json::Value) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.update_settings(&settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn pause_tracking(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let mut state = state.lock().map_err(|e| e.to_string())?;
+    state.paused = true;
+    Ok(())
+}
+
+#[tauri::command]
+async fn resume_tracking(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let mut state = state.lock().map_err(|e| e.to_string())?;
+    state.paused = false;
+    Ok(())
+}
+
+#[tauri::command]
+async fn is_tracking_paused(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<bool, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    Ok(state.paused)
+}
+
+#[tauri::command]
+async fn export_data(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    format: String, start_date: String, end_date: String, output_path: String,
+) -> Result<String, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    export::export_data(&state.db, &format, &start_date, &end_date, &output_path)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_timeline(state: tauri::State<'_, Arc<Mutex<AppState>>>, date: String) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_timeline(&date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn backup_database(state: tauri::State<'_, Arc<Mutex<AppState>>>, backup_path: String) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.backup(&backup_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_current_session(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "current_app":   state.current_app,
+        "session_start": state.session_start,
+        "is_idle":       state.is_idle,
+    }))
+}
+
+/// Move the database file to a new location, update the stored path, and
+/// reopen the connection. Monitoring continues during the move because we
+/// hold the state lock for only the critical section.
+#[tauri::command]
+async fn move_database(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    new_path: String,
+) -> Result<String, String> {
+    let new_path = new_path.trim().to_string();
+    if new_path.is_empty() {
+        return Err("Path cannot be empty".into());
+    }
+
+    // Validate the parent directory is accessible
+    let parent = std::path::Path::new(&new_path).parent()
+        .ok_or("Invalid path: no parent directory")?;
+    std::fs::create_dir_all(parent)
+        .map_err(|e| format!("Cannot create directory: {}", e))?;
+
+    let mut state = state.lock().map_err(|e| e.to_string())?;
+
+    // Copy existing DB to new location
+    state.db.move_to(&new_path).map_err(|e| e.to_string())?;
+
+    // Reopen at new location
+    let new_db = Database::open(&new_path).map_err(|e| e.to_string())?;
+
+    // Persist new path in the new DB
+    new_db.update_settings(&serde_json::json!({ "database_path": new_path }))
+        .map_err(|e| e.to_string())?;
+
+    state.db = new_db;
+    log::info!("Database moved to {}", new_path);
+    Ok(new_path)
+}
+
+/// Reset the database location back to the platform default.
+#[tauri::command]
+async fn reset_database_path(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<String, String> {
+    let default_path = services::default_db_path();
+    let mut state = state.lock().map_err(|e| e.to_string())?;
+
+    let current_path = state.db.db_path.clone();
+
+    // 🛠️ FIX: If we are already at the default path, don't try to copy over ourselves.
+    // std::fs::copy fails if source and destination are the same (especially if file is locked).
+    if current_path == default_path || std::path::Path::new(&current_path).canonicalize().ok() == std::path::Path::new(&default_path).canonicalize().ok() {
+        log::info!("Database is already at default location: {}", default_path);
+        return Ok(default_path);
+    }
+
+    // Move DB to default
+    state.db.move_to(&default_path).map_err(|e| e.to_string())?;
+
+    // Reopen at new location
+    let new_db = Database::open(&default_path).map_err(|e| e.to_string())?;
+    new_db.update_settings(&serde_json::json!({ "database_path": default_path }))
+        .map_err(|e| e.to_string())?;
+
+    state.db = new_db;
+    log::info!("Database reset to default: {}", default_path);
+    Ok(default_path)
+}
+
+// ─── App Entry ────────────────────────────────────────────────────────────────
+
+pub fn run() {
+    env_logger::init();
+
+    let app_state = services::init_app_state().expect("Failed to initialize app state");
+    let state_arc = Arc::new(Mutex::new(app_state));
+    let state_for_monitor = Arc::clone(&state_arc);
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(state_arc)
+        .setup(|app| {
+            let open_item   = MenuItem::with_id(app, "open",   "Open FocusPulse", true, None::<&str>)?;
+            let sep1        = PredefinedMenuItem::separator(app)?;
+            let pause_item  = MenuItem::with_id(app, "pause",  "Pause Tracking",  true, None::<&str>)?;
+            let resume_item = MenuItem::with_id(app, "resume", "Resume Tracking", true, None::<&str>)?;
+            let sep2        = PredefinedMenuItem::separator(app)?;
+            let quit_item   = MenuItem::with_id(app, "quit",   "Exit",            true, None::<&str>)?;
+
+            let menu = Menu::with_items(app, &[
+                &open_item, &sep1, &pause_item, &resume_item, &sep2, &quit_item,
+            ])?;
+
+            TrayIconBuilder::new()
+                .menu(&menu)
+                .tooltip("FocusPulse")
+                .icon(app.default_window_icon().unwrap().clone())
+                .on_menu_event(|app, event| {
+                    tray::handle_tray_event(app, event.id.as_ref());
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event {
+                        tray::open_or_focus_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+
+            let handle = app.handle().clone();
+            monitoring::start_monitoring_loop(state_for_monitor, handle);
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                window.hide().unwrap();
+                api.prevent_close();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_today_stats,
+            get_daily_usage,
+            get_weekly_usage,
+            get_monthly_usage,
+            get_app_list,
+            update_app_category,
+            update_app_display_name,
+            set_app_ignored,
+            get_hourly_heatmap,
+            get_settings,
+            update_settings,
+            pause_tracking,
+            resume_tracking,
+            is_tracking_paused,
+            export_data,
+            get_timeline,
+            backup_database,
+            get_current_session,
+            move_database,
+            reset_database_path,
+        ])
+        .build(tauri::generate_context!())
+        .expect("Error building FocusPulse app")
+        .run(|_app, event| {
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                api.prevent_exit();
+            }
+        });
+}
