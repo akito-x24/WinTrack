@@ -1,1 +1,1 @@
-{}
+{"main-capability":{"identifier":"main-capability","description":"Main window capabilities","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-open","dialog:allow-save","notification:default","notification:allow-notify","shell:allow-open","autostart:allow-enable","autostart:allow-disable","autostart:allow-is-enabled"]}}
