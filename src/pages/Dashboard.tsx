@@ -39,7 +39,7 @@ export default function Dashboard() {
           accent="#f59e0b"
         />
         <div className="fp-card flex items-center gap-4">
-          <ProductivityRing score={stats?.productivity_score ?? 0} size={72} />
+          <ProductivityRing score={stats?.productivity_score ?? 0} size={80} />
           <div>
             <div className="fp-label mb-1">Focus Score</div>
             <div className="text-lg font-semibold text-fp-text">
