@@ -30,6 +30,7 @@ interface AppStore {
   updateAppDisplayName: (id: number, name: string) => Promise<void>;
   setAppIgnored: (id: number, ignored: boolean) => Promise<void>;
   updateAppDailyLimit: (id: number, limit: number | null) => Promise<void>;
+  updateAppReminderInterval: (id: number, interval: number) => Promise<void>;
   toggleTracking: () => Promise<void>;
 
   refreshAll: () => Promise<void>;
@@ -129,6 +130,14 @@ export const useStore = create<AppStore>((set, get) => ({
 
   updateAppDailyLimit: async (id, limit) => {
     await api.updateAppDailyLimit(id, limit);
+    await Promise.all([
+      get().fetchAppList(),
+      get().fetchTodayStats(),
+    ]);
+  },
+
+  updateAppReminderInterval: async (id, interval) => {
+    await api.updateAppReminderInterval(id, interval);
     await Promise.all([
       get().fetchAppList(),
       get().fetchTodayStats(),

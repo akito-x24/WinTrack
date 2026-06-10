@@ -142,6 +142,7 @@ export default function AppBreakdown() {
                   <th className="px-4 py-3 text-right">Total</th>
                   <th className="px-4 py-3 text-right">Category</th>
                   <th className="px-4 py-3 text-right">Limit</th>
+                  <th className="px-4 py-3 text-right">Reminder</th>
                   <th className="px-4 py-3 text-right">Status</th>
                   <th className="w-20 px-5 py-3 text-center">Ignore</th>
                 </tr>
@@ -184,6 +185,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
   const [limitInput, setLimitInput] = useState(
     app.daily_limit_minutes?.toString() ?? ""
   );
+  const [editingReminder, setEditingReminder] = useState(false);
 
   useEffect(() => { setNameInput(app.display_name); }, [app.display_name]);
 
@@ -338,6 +340,44 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
             {app.daily_limit_minutes
               ? `${app.daily_limit_minutes}m`
               : "None"}
+          </button>
+        )}
+      </td>
+
+      {/* Reminder */}
+      <td className="px-4 py-3 text-right">
+        {editingReminder ? (
+          <select
+            autoFocus
+            defaultValue={app.reminder_interval_minutes ?? 0}
+            onChange={async (e) => {
+              await useStore
+                .getState()
+                .updateAppReminderInterval(
+                  app.id,
+                  Number(e.target.value)
+                );
+
+              setEditingReminder(false);
+            }}
+            className="bg-fp-card border border-fp-border text-fp-text text-xs rounded-lg px-2 py-1"
+          >
+            <option value={0}>Off</option>
+            <option value={5}>5m</option>
+            <option value={10}>10m</option>
+            <option value={15}>15m</option>
+            <option value={20}>20m</option>
+            <option value={25}>25m</option>
+            <option value={30}>30m</option>
+          </select>
+        ) : (
+          <button
+            onClick={() => setEditingReminder(true)}
+            className="text-xs text-fp-accent hover:underline rounded px-2 py-1 hover:bg-fp-accent/10"
+          >
+            {app.reminder_interval_minutes
+              ? `${app.reminder_interval_minutes}m`
+              : "Off"}
           </button>
         )}
       </td>
