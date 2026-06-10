@@ -20,7 +20,7 @@ pub fn handle_tray_event(app: &AppHandle, id: &str) {
             }
         }
         "quit" => {
-            log::info!("Quitting FocusPulse");
+            log::info!("Quitting WinTrack");
             std::process::exit(0);
         }
         _ => {}

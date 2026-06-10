@@ -47,7 +47,7 @@ export default function SettingsPage() {
     const folder = await api.pickFolder();
     if (!folder || !local) return;
     const cleanFolder = folder.replace(/\//g, "\\").replace(/\\+$/, "");
-    const newPath = `${cleanFolder}\\focuspulse.db`;
+    const newPath = `${cleanFolder}\\WinTrack.db`;
     await handleMoveDb(newPath);
   };
 
@@ -122,7 +122,7 @@ export default function SettingsPage() {
 
       {/* System */}
       <SettingsSection title="System">
-        <SettingsRow label="Launch on Startup" description="Start FocusPulse automatically when Windows starts">
+        <SettingsRow label="Launch on Startup" description="Start WinTrack automatically when Windows starts">
           <Toggle
             checked={local.launch_on_startup}
             onChange={async (v) => {
@@ -137,7 +137,7 @@ export default function SettingsPage() {
             onChange={async (v) => {
               set("notification_enabled", v);
               // Send a test notification when enabling so user confirms it works
-              if (v) await api.sendNotification("FocusPulse", "Notifications enabled ✓");
+              if (v) await api.sendNotification("WinTrack", "Notifications enabled ✓");
             }}
           />
         </SettingsRow>
@@ -193,7 +193,7 @@ export default function SettingsPage() {
             </div>
           )}
           <p className="text-[11px] text-fp-amber">
-            ⚠ After moving the database, restart FocusPulse to ensure tracking uses the new location.
+            ⚠ After moving the database, restart WinTrack to ensure tracking uses the new location.
           </p>
         </div>
       </SettingsSection>

@@ -32,51 +32,6 @@ export function StatCard({ label, value, sub, accent, icon }: StatCardProps) {
   );
 }
 
-// ─── ProductivityRing ─────────────────────────────────────────────────────────
-
-interface ProductivityRingProps {
-  score: number;
-  size?: number;
-}
-
-export function ProductivityRing({ score, size = 80 }: ProductivityRingProps) {
-  const r = (size - 8) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ - (score / 100) * circ;
-  const color = score >= 70 ? "#22c55e" : score >= 40 ? "#f59e0b" : "#ef4444";
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#252a36" strokeWidth={6} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={6}
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        style={{ transition: "stroke-dashoffset 0.6s ease" }}
-      />
-      <text
-        x={size / 2}
-        y={size / 2 + 1}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill={color}
-        fontSize="14"
-        fontWeight="600"
-        fontFamily="DM Sans"
-      >
-        {score}%
-      </text>
-    </svg>
-  );
-}
-
 // ─── AppRow ───────────────────────────────────────────────────────────────────
 
 interface AppRowProps {
@@ -99,13 +54,16 @@ export function AppRow({ name, exePath, category, durationSeconds, maxSeconds, r
       {rank && (
         <span className="text-xs text-fp-muted w-4 text-right shrink-0">{rank}</span>
       )}
+
       {/* Icon */}
       <div
         className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
         style={{ background: bgColor + "33", color: bgColor, border: `1px solid ${bgColor}33` }}
+        title={exePath}
       >
         {initials || "?"}
       </div>
+
       {/* Name + bar */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
@@ -119,6 +77,7 @@ export function AppRow({ name, exePath, category, durationSeconds, maxSeconds, r
           />
         </div>
       </div>
+
       {/* Category */}
       <CategoryBadge category={category} />
     </div>

@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useStore } from "../store";
 import { api } from "../utils/api";
 import {
-  StatCard, AppRow, SectionHeader, LoadingSpinner, ProductivityRing
+  StatCard,
+  AppRow,
+  SectionHeader,
+  LoadingSpinner,
 } from "../components/ui";
 import CategoryPieChart from "../components/charts/CategoryPieChart";
 import HourlyHeatmap from "../components/charts/HourlyHeatmap";
@@ -10,6 +13,7 @@ import { formatDuration, todayString, subtractDays } from "../utils/helpers";
 import type { DailyStats } from "../types";
 
 export default function DailyAnalytics() {
+  const { weeklyStats } = useStore();
   const [date, setDate] = useState(todayString());
   const [stats, setStats] = useState<DailyStats | null>(useStore.getState().todayStats);
   const [loading, setLoading] = useState(false);
@@ -28,6 +32,15 @@ export default function DailyAnalytics() {
     setDate(d);
     fetchDate(d);
   };
+
+  const avgSeconds = weeklyStats?.days?.length
+    ? Math.round(
+        weeklyStats.days.reduce((sum, day) => sum + day.active_seconds, 0) /
+          weeklyStats.days.length
+      )
+    : 0;
+
+  const topApp = stats?.apps?.[0];
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
@@ -60,20 +73,35 @@ export default function DailyAnalytics() {
         </button>
       </div>
 
-      {loading ? <LoadingSpinner /> : stats ? (
+      {loading ? (
+        <LoadingSpinner />
+      ) : stats ? (
         <>
           {/* Stats row */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total Active" value={formatDuration(stats.total_active_seconds)} accent="#3b82f6" />
-            <StatCard label="Productive" value={formatDuration(stats.productive_seconds)} accent="#22c55e" />
-            <StatCard label="Idle" value={formatDuration(stats.total_idle_seconds)} accent="#f59e0b" />
-            <div className="fp-card flex items-center gap-4">
-              <ProductivityRing score={stats.productivity_score} size={64} />
-              <div>
-                <div className="fp-label">Score</div>
-                <div className="text-lg font-bold text-fp-text">{stats.productivity_score}%</div>
-              </div>
-            </div>
+            <StatCard
+              label="Total Active"
+              value={formatDuration(stats.total_active_seconds)}
+              accent="#3b82f6"
+            />
+            <StatCard
+              label="Daily Average"
+              value={formatDuration(avgSeconds)}
+              sub="Based on weekly data"
+              accent="#22c55e"
+            />
+            <StatCard
+              label="Apps Used"
+              value={String(stats.apps.length)}
+              sub="Tracked today"
+              accent="#8b5cf6"
+            />
+            <StatCard
+              label="Top App"
+              value={topApp?.app_name ?? "None"}
+              sub={topApp ? formatDuration(topApp.duration_seconds) : "No usage"}
+              accent="#06b6d4"
+            />
           </div>
 
           {/* Heatmap */}

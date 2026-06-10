@@ -16,21 +16,27 @@ impl Database {
         }
         let conn = Connection::open(db_path)
             .with_context(|| format!("Failed to open database at {}", db_path))?;
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             PRAGMA journal_mode=WAL;
             PRAGMA synchronous=NORMAL;
             PRAGMA cache_size=-32000;
             PRAGMA temp_store=MEMORY;
             PRAGMA mmap_size=268435456;
-        ")?;
-        let db = Database { conn, db_path: db_path.to_string() };
+        ",
+        )?;
+        let db = Database {
+            conn,
+            db_path: db_path.to_string(),
+        };
         db.migrate()?;
         Ok(db)
     }
 
     fn migrate(&self) -> Result<()> {
         // Base schema
-        self.conn.execute_batch("
+        self.conn.execute_batch(
+            "
             CREATE TABLE IF NOT EXISTS apps (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_name TEXT NOT NULL,
@@ -50,7 +56,7 @@ impl Database {
                 duration_seconds INTEGER NOT NULL DEFAULT 0,
                 was_idle INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (app_id) REFERENCES apps(id)
-            );
+            ); 
 
             CREATE INDEX IF NOT EXISTS idx_sessions_start ON usage_sessions(start_time);
             CREATE INDEX IF NOT EXISTS idx_sessions_app_id ON usage_sessions(app_id);
@@ -79,31 +85,120 @@ impl Database {
             );
 
             INSERT OR IGNORE INTO settings (id) VALUES (1);
-        ")?;
+        ",
+        )?;
 
         // ── Migrations: add new columns if they don't exist ──────────────────
         // display_name: user-facing custom name (NULL = use app_name)
-        let has_display_name: bool = self.conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='display_name'",
-            [], |r| r.get::<_, i64>(0),
-        ).unwrap_or(0) > 0;
+        let has_display_name: bool = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='display_name'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
         if !has_display_name {
-            self.conn.execute_batch(
-                "ALTER TABLE apps ADD COLUMN display_name TEXT;"
-            )?;
+            self.conn
+                .execute_batch("ALTER TABLE apps ADD COLUMN display_name TEXT;")?;
             log::info!("Migration: added apps.display_name");
         }
 
         // is_ignored: when true, tracker skips this app entirely
-        let has_ignored: bool = self.conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='is_ignored'",
-            [], |r| r.get::<_, i64>(0),
-        ).unwrap_or(0) > 0;
+        let has_ignored: bool = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='is_ignored'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
         if !has_ignored {
             self.conn.execute_batch(
-                "ALTER TABLE apps ADD COLUMN is_ignored INTEGER NOT NULL DEFAULT 0;"
+                "ALTER TABLE apps ADD COLUMN is_ignored INTEGER NOT NULL DEFAULT 0;",
             )?;
             log::info!("Migration: added apps.is_ignored");
+        }
+
+        // daily_limit_minutes: optional per-app limit in minutes (NULL = no limit)
+        let has_daily_limit_minutes: bool = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='daily_limit_minutes'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        if !has_daily_limit_minutes {
+            self.conn
+                .execute_batch("ALTER TABLE apps ADD COLUMN daily_limit_minutes INTEGER;")?;
+            log::info!("Migration: added apps.daily_limit_minutes");
+        }
+
+        // reminder_interval_minutes: how often to repeat reminders after limit is exceeded
+        let has_reminder_interval_minutes: bool = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='reminder_interval_minutes'",
+            [], |r| r.get::<_, i64>(0),
+        ).unwrap_or(0) > 0;
+        if !has_reminder_interval_minutes {
+            self.conn.execute_batch(
+                "ALTER TABLE apps ADD COLUMN reminder_interval_minutes INTEGER NOT NULL DEFAULT 15;"
+            )?;
+            log::info!("Migration: added apps.reminder_interval_minutes");
+        }
+
+        // soft_lock_enabled: whether to show the soft-lock warning window
+        let has_soft_lock_enabled: bool = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='soft_lock_enabled'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        if !has_soft_lock_enabled {
+            self.conn.execute_batch(
+                "ALTER TABLE apps ADD COLUMN soft_lock_enabled INTEGER NOT NULL DEFAULT 0;",
+            )?;
+            log::info!("Migration: added apps.soft_lock_enabled");
+        }
+        // limit_notification_sent
+        let has_limit_notification_sent: bool = self
+    .conn
+    .query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='limit_notification_sent'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+    > 0;
+
+        if !has_limit_notification_sent {
+            self.conn.execute_batch(
+                "ALTER TABLE apps ADD COLUMN limit_notification_sent INTEGER NOT NULL DEFAULT 0;",
+            )?;
+            log::info!("Migration: added apps.limit_notification_sent");
+        }
+
+        // last_limit_notification_date
+        let has_last_limit_notification_date: bool = self
+    .conn
+    .query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='last_limit_notification_date'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+    > 0;
+
+        if !has_last_limit_notification_date {
+            self.conn
+                .execute_batch("ALTER TABLE apps ADD COLUMN last_limit_notification_date TEXT;")?;
+            log::info!("Migration: added apps.last_limit_notification_date");
         }
 
         Ok(())
@@ -133,13 +228,71 @@ impl Database {
         Ok((id, is_ignored))
     }
 
+    /// Set per-app daily limit in minutes. None removes the limit.
+    pub fn update_app_daily_limit(&self, app_id: i64, limit_minutes: Option<i64>) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps SET daily_limit_minutes = ?1 WHERE id = ?2",
+            params![limit_minutes, app_id],
+        )?;
+        Ok(())
+    }
+
+    /// Set reminder interval in minutes for over-limit notifications.
+    pub fn update_app_reminder_interval(&self, app_id: i64, interval_minutes: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps SET reminder_interval_minutes = ?1 WHERE id = ?2",
+            params![interval_minutes, app_id],
+        )?;
+        Ok(())
+    }
+
+    /// Enable or disable soft lock for an app.
+    pub fn set_app_soft_lock_enabled(&self, app_id: i64, enabled: bool) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps SET soft_lock_enabled = ?1 WHERE id = ?2",
+            params![enabled as i32, app_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn should_send_limit_notification(&self, app_id: i64, today: &str) -> Result<bool> {
+        let result = self.conn.query_row(
+            "SELECT
+            limit_notification_sent,
+            COALESCE(last_limit_notification_date, '')
+         FROM apps
+         WHERE id = ?1",
+            params![app_id],
+            |row| Ok((row.get::<_, bool>(0)?, row.get::<_, String>(1)?)),
+        );
+
+        match result {
+            Ok((sent, last_date)) => Ok(!sent || last_date != today),
+            Err(_) => Ok(true),
+        }
+    }
+
+    pub fn mark_limit_notification_sent(&self, app_id: i64, today: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps
+         SET limit_notification_sent = 1,
+             last_limit_notification_date = ?1
+         WHERE id = ?2",
+            params![today, app_id],
+        )?;
+
+        Ok(())
+    }
+
     /// Check if a given executable path is ignored (fast path for monitoring loop).
     pub fn is_app_ignored(&self, executable_path: &str) -> bool {
-        self.conn.query_row(
-            "SELECT is_ignored FROM apps WHERE executable_path = ?1",
-            params![executable_path],
-            |r| r.get::<_, bool>(0),
-        ).unwrap_or(false)
+        self.conn
+            .query_row(
+                "SELECT is_ignored FROM apps WHERE executable_path = ?1",
+                params![executable_path],
+                |r| r.get::<_, bool>(0),
+            )
+            .unwrap_or(false)
     }
 
     pub fn get_all_apps(&self) -> Result<Value> {
@@ -150,20 +303,40 @@ impl Database {
                     executable_path,
                     category,
                     is_ignored,
-                    COALESCE((SELECT SUM(duration_seconds) FROM usage_sessions WHERE app_id = apps.id), 0) as total_seconds
+                    daily_limit_minutes,
+                    reminder_interval_minutes,
+                    soft_lock_enabled,
+                    COALESCE(
+                         (SELECT SUM(duration_seconds)
+                         FROM usage_sessions
+                         WHERE app_id = apps.id),
+                        0
+                    ) as total_seconds,
+
+                    COALESCE(
+                    (SELECT SUM(duration_seconds)
+                          FROM usage_sessions
+                          WHERE app_id = apps.id
+                            AND DATE(start_time) = DATE('now','localtime')),
+                         0
+                    ) as today_seconds
              FROM apps
              ORDER BY total_seconds DESC",
         )?;
         let apps: Vec<Value> = stmt
             .query_map([], |row| {
                 Ok(json!({
-                    "id":               row.get::<_, i64>(0)?,
-                    "display_name":     row.get::<_, String>(1)?,
-                    "app_name":         row.get::<_, String>(2)?,
-                    "executable_path":  row.get::<_, String>(3)?,
-                    "category":         row.get::<_, String>(4)?,
-                    "is_ignored":       row.get::<_, bool>(5)?,
-                    "total_seconds":    row.get::<_, i64>(6)?,
+                    "id":                       row.get::<_, i64>(0)?,
+                    "display_name":             row.get::<_, String>(1)?,
+                    "app_name":                 row.get::<_, String>(2)?,
+                    "executable_path":          row.get::<_, String>(3)?,
+                    "category":                 row.get::<_, String>(4)?,
+                    "is_ignored":               row.get::<_, bool>(5)?,
+                    "daily_limit_minutes":      row.get::<_, Option<i64>>(6)?,
+                    "reminder_interval_minutes": row.get::<_, i64>(7)?,
+                    "soft_lock_enabled":        row.get::<_, bool>(8)?,
+                    "total_seconds":            row.get::<_, i64>(9)?,
+                    "today_seconds":            row.get::<_, i64>(10)?,
                 }))
             })?
             .filter_map(|r| r.ok())
@@ -226,6 +399,34 @@ impl Database {
     pub fn get_today_stats(&self) -> Result<Value> {
         let today = Local::now().format("%Y-%m-%d").to_string();
         self.get_daily_usage(&today)
+    }
+
+    pub fn get_app_limit_status(&self, app_id: i64) -> Result<Option<(i64, i64)>> {
+        let today_usage: i64 = self.conn.query_row(
+            "
+        SELECT COALESCE(SUM(duration_seconds), 0)
+        FROM usage_sessions
+        WHERE app_id = ?1
+          AND DATE(start_time) = DATE('now','localtime')
+        ",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+
+        let daily_limit: Option<i64> = self.conn.query_row(
+            "
+        SELECT daily_limit_minutes
+        FROM apps
+        WHERE id = ?1
+        ",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+
+        match daily_limit {
+            Some(limit) => Ok(Some((today_usage, limit))),
+            None => Ok(None),
+        }
     }
 
     pub fn get_daily_usage(&self, date: &str) -> Result<Value> {
@@ -454,48 +655,68 @@ impl Database {
 
     pub fn update_settings(&self, settings: &Value) -> Result<()> {
         if let Some(v) = settings.get("polling_interval_ms") {
-            self.conn.execute("UPDATE settings SET polling_interval_ms = ?1 WHERE id = 1",
-                params![v.as_i64().unwrap_or(500)])?;
+            self.conn.execute(
+                "UPDATE settings SET polling_interval_ms = ?1 WHERE id = 1",
+                params![v.as_i64().unwrap_or(500)],
+            )?;
         }
         if let Some(v) = settings.get("idle_threshold_minutes") {
-            self.conn.execute("UPDATE settings SET idle_threshold_minutes = ?1 WHERE id = 1",
-                params![v.as_i64().unwrap_or(1)])?;
+            self.conn.execute(
+                "UPDATE settings SET idle_threshold_minutes = ?1 WHERE id = 1",
+                params![v.as_i64().unwrap_or(1)],
+            )?;
         }
         if let Some(v) = settings.get("launch_on_startup") {
-            self.conn.execute("UPDATE settings SET launch_on_startup = ?1 WHERE id = 1",
-                params![v.as_bool().unwrap_or(true) as i32])?;
+            self.conn.execute(
+                "UPDATE settings SET launch_on_startup = ?1 WHERE id = 1",
+                params![v.as_bool().unwrap_or(true) as i32],
+            )?;
         }
         if let Some(v) = settings.get("theme") {
-            self.conn.execute("UPDATE settings SET theme = ?1 WHERE id = 1",
-                params![v.as_str().unwrap_or("dark")])?;
+            self.conn.execute(
+                "UPDATE settings SET theme = ?1 WHERE id = 1",
+                params![v.as_str().unwrap_or("dark")],
+            )?;
         }
         if let Some(v) = settings.get("notification_enabled") {
-            self.conn.execute("UPDATE settings SET notification_enabled = ?1 WHERE id = 1",
-                params![v.as_bool().unwrap_or(true) as i32])?;
+            self.conn.execute(
+                "UPDATE settings SET notification_enabled = ?1 WHERE id = 1",
+                params![v.as_bool().unwrap_or(true) as i32],
+            )?;
         }
         if let Some(v) = settings.get("daily_goal_minutes") {
-            self.conn.execute("UPDATE settings SET daily_goal_minutes = ?1 WHERE id = 1",
-                params![v.as_i64().unwrap_or(480)])?;
+            self.conn.execute(
+                "UPDATE settings SET daily_goal_minutes = ?1 WHERE id = 1",
+                params![v.as_i64().unwrap_or(480)],
+            )?;
         }
         if let Some(v) = settings.get("database_path") {
-            self.conn.execute("UPDATE settings SET database_path = ?1 WHERE id = 1",
-                params![v.as_str().unwrap_or("")])?;
+            self.conn.execute(
+                "UPDATE settings SET database_path = ?1 WHERE id = 1",
+                params![v.as_str().unwrap_or("")],
+            )?;
         }
         Ok(())
     }
 
     pub fn get_polling_interval(&self) -> i64 {
-        self.conn.query_row(
-            "SELECT polling_interval_ms FROM settings WHERE id = 1",
-            [], |row| row.get(0),
-        ).unwrap_or(1000)
+        self.conn
+            .query_row(
+                "SELECT polling_interval_ms FROM settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(1000)
     }
 
     pub fn get_idle_threshold(&self) -> i64 {
-        self.conn.query_row(
-            "SELECT idle_threshold_minutes FROM settings WHERE id = 1",
-            [], |row| row.get(0),
-        ).unwrap_or(5)
+        self.conn
+            .query_row(
+                "SELECT idle_threshold_minutes FROM settings WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(5)
     }
 
     // ─── Export ──────────────────────────────────────────────────────────────
@@ -534,7 +755,8 @@ impl Database {
         if let Some(parent) = Path::new(backup_path).parent() {
             std::fs::create_dir_all(parent)?;
         }
-        self.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        self.conn
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
         std::fs::copy(&self.db_path, backup_path)?;
         Ok(())
     }
@@ -545,13 +767,14 @@ impl Database {
         if self.db_path == new_path {
             return Ok(());
         }
-        
+
         if let Some(parent) = Path::new(new_path).parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("Cannot create directory for {}", new_path))?;
         }
-        self.conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
-        
+        self.conn
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+
         std::fs::copy(&self.db_path, new_path)
             .with_context(|| format!("Cannot copy DB to {}", new_path))?;
         Ok(())
@@ -564,31 +787,131 @@ fn auto_categorize(app_name: &str, exe_path: &str) -> &'static str {
     let lower = app_name.to_lowercase();
     let path_lower = exe_path.to_lowercase();
 
-    if matches_any(&lower, &["code", "visual studio", "intellij", "pycharm", "rider", "webstorm",
-        "clion", "goland", "datagrip", "eclipse", "netbeans", "vim", "neovim", "emacs",
-        "sublime", "notepad++", "cursor", "windsurf", "zed"]) ||
-       matches_any(&path_lower, &["\\code\\", "\\vscode\\", "jetbrains", "\\git\\", "terminal", "cmd.exe", "powershell"]) {
+    if matches_any(
+        &lower,
+        &[
+            "code",
+            "visual studio",
+            "intellij",
+            "pycharm",
+            "rider",
+            "webstorm",
+            "clion",
+            "goland",
+            "datagrip",
+            "eclipse",
+            "netbeans",
+            "vim",
+            "neovim",
+            "emacs",
+            "sublime",
+            "notepad++",
+            "cursor",
+            "windsurf",
+            "zed",
+        ],
+    ) || matches_any(
+        &path_lower,
+        &[
+            "\\code\\",
+            "\\vscode\\",
+            "jetbrains",
+            "\\git\\",
+            "terminal",
+            "cmd.exe",
+            "powershell",
+        ],
+    ) {
         return "Development";
     }
-    if matches_any(&lower, &["word", "excel", "powerpoint", "outlook", "onenote", "notion",
-        "obsidian", "teams", "zoom", "meet", "slack", "trello", "asana", "jira", "confluence",
-        "office", "libreoffice", "thunderbird", "calendar"]) {
+    if matches_any(
+        &lower,
+        &[
+            "word",
+            "excel",
+            "powerpoint",
+            "outlook",
+            "onenote",
+            "notion",
+            "obsidian",
+            "teams",
+            "zoom",
+            "meet",
+            "slack",
+            "trello",
+            "asana",
+            "jira",
+            "confluence",
+            "office",
+            "libreoffice",
+            "thunderbird",
+            "calendar",
+        ],
+    ) {
         return "Productive";
     }
-    if matches_any(&lower, &["youtube", "netflix", "spotify", "vlc", "mpv", "plex",
-        "kodi", "prime video", "disney", "twitch", "winamp", "foobar"]) {
+    if matches_any(
+        &lower,
+        &[
+            "youtube",
+            "netflix",
+            "spotify",
+            "vlc",
+            "mpv",
+            "plex",
+            "kodi",
+            "prime video",
+            "disney",
+            "twitch",
+            "winamp",
+            "foobar",
+        ],
+    ) {
         return "Entertainment";
     }
-    if matches_any(&lower, &["steam", "epic games", "battle.net", "origin", "uplay", "gog",
-        "minecraft", "fortnite", "valorant", "league of legends", "game"]) ||
-       path_lower.contains("games") || path_lower.contains("steam") {
+    if matches_any(
+        &lower,
+        &[
+            "steam",
+            "epic games",
+            "battle.net",
+            "origin",
+            "uplay",
+            "gog",
+            "minecraft",
+            "fortnite",
+            "valorant",
+            "league of legends",
+            "game",
+        ],
+    ) || path_lower.contains("games")
+        || path_lower.contains("steam")
+    {
         return "Gaming";
     }
-    if matches_any(&lower, &["discord", "telegram", "whatsapp", "signal", "messenger",
-        "twitter", "reddit", "instagram", "facebook", "linkedin"]) {
+    if matches_any(
+        &lower,
+        &[
+            "discord",
+            "telegram",
+            "whatsapp",
+            "signal",
+            "messenger",
+            "twitter",
+            "reddit",
+            "instagram",
+            "facebook",
+            "linkedin",
+        ],
+    ) {
         return "Social";
     }
-    if matches_any(&lower, &["chrome", "firefox", "edge", "opera", "brave", "safari", "vivaldi"]) {
+    if matches_any(
+        &lower,
+        &[
+            "chrome", "firefox", "edge", "opera", "brave", "safari", "vivaldi",
+        ],
+    ) {
         return "Productive";
     }
     "Other"

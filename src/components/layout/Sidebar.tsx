@@ -27,10 +27,10 @@ export default function Sidebar() {
       <div className="px-5 py-5 border-b border-fp-border">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-fp-accent flex items-center justify-center">
-            <span className="text-white text-sm font-bold">FP</span>
+            <span className="text-white text-sm font-bold"></span>
           </div>
           <div>
-            <div className="text-sm font-semibold text-fp-text">FocusPulse</div>
+            <div className="text-sm font-semibold text-fp-text">WinTrack</div>
             <div className="text-[10px] text-fp-muted">v2.4.0</div>
           </div>
         </div>

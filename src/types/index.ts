@@ -7,7 +7,13 @@ export interface App {
   executable_path: string;
   category: AppCategory;
   is_ignored: boolean;
+  
+  daily_limit_minutes?: number | null;
+  reminder_interval_minutes?: number;
+  soft_lock_enabled?: boolean;
+
   total_seconds: number;
+  today_seconds?: number;
 }
 
 export type AppCategory =
@@ -34,8 +40,6 @@ export interface DailyStats {
   date: string;
   total_active_seconds: number;
   total_idle_seconds: number;
-  productive_seconds: number;
-  productivity_score: number;
   apps: AppUsage[];
   categories: CategoryUsage[];
 }
@@ -63,7 +67,6 @@ export interface DayStats {
   date: string;
   active_seconds: number;
   idle_seconds: number;
-  productive_seconds: number;
 }
 
 export interface MonthlyStats {
@@ -99,13 +102,13 @@ export interface CurrentSession {
 }
 
 export const CATEGORY_COLORS: Record<AppCategory, string> = {
-  Productive:    "#22c55e",
+  Productive: "#22c55e",
   Entertainment: "#f59e0b",
-  Social:        "#8b5cf6",
-  Gaming:        "#ef4444",
-  Development:   "#3b82f6",
-  Study:         "#06b6d4",
-  Other:         "#64748b",
+  Social: "#8b5cf6",
+  Gaming: "#ef4444",
+  Development: "#3b82f6",
+  Study: "#06b6d4",
+  Other: "#64748b",
 };
 
 export const CATEGORY_LABELS: AppCategory[] = [

@@ -5,7 +5,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // FocusPulse design tokens
+        // WinTrack design tokens
         fp: {
           bg: "#0d0f14",
           surface: "#13161e",

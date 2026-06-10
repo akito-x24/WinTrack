@@ -1,16 +1,16 @@
 [package]
-name = "focuspulse"
-version = "1.0.0"
-description = "FocusPulse - Windows Screen Time & Focus Tracker"
-authors = ["FocusPulse"]
+name = "wintrack"
+version = "2.0.0"
+description = "WinTrack - Windows Application Usage Tracker"
+authors = ["AKITO"]
 edition = "2021"
 
 [lib]
-name = "focuspulse_lib"
+name = "wintrack_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "focuspulse"
+name = "wintrack"
 path = "src/main.rs"
 
 [build-dependencies]

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { open as dialogOpen } from "@tauri-apps/plugin-dialog";
+import {open as dialogOpen, save as dialogSave} from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart } from "@tauri-apps/plugin-autostart";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import type {
@@ -30,6 +30,7 @@ export const api = {
   updateAppCategory:    (app_id: number, category: string) => call<boolean>("update_app_category", { appId: app_id, category }),
   updateAppDisplayName: (app_id: number, display_name: string) => call<boolean>("update_app_display_name", { appId: app_id, displayName: display_name }),
   setAppIgnored:        (app_id: number, ignored: boolean) => call<boolean>("set_app_ignored", { appId: app_id, ignored }),
+  updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", {appId: app_id, limitMinutes: limit_minutes}),
 
   updateSettings:  (settings: Partial<Settings>) => call<boolean>("update_settings", { settings }),
   pauseTracking:   () => call<boolean>("pause_tracking"),
@@ -83,11 +84,11 @@ export const api = {
   
   // ─── File save picker (for export) ────────────────────────────────────────
   pickSavePath: async (format: "csv" | "json"): Promise<string | null> => {
-    if (!isTauri()) return `C:\\Users\\User\\Downloads\\focuspulse-export.${format}`;
+    if (!isTauri()) return `C:\\Users\\User\\Downloads\\wintrack-export.${format}`;
     try {
       const result = await dialogSave({
         title: "Save export file",
-        defaultPath: `focuspulse-export.${format}`,
+        defaultPath: `wintrack-export.${format}`,
         filters: format === "csv"
           ? [{ name: "CSV", extensions: ["csv"] }]
           : [{ name: "JSON", extensions: ["json"] }],
@@ -136,9 +137,9 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
   }));
 
   const totalActive = mockApps.reduce((s, a) => s + a.duration_seconds, 0);
-  const productive = mockApps
-    .filter(a => ["Development", "Productive", "Study"].includes(a.category))
-    .reduce((s, a) => s + a.duration_seconds, 0);
+  // const productive = mockApps
+  //   .filter(a => ["Development", "Productive", "Study"].includes(a.category))
+  //   .reduce((s, a) => s + a.duration_seconds, 0);
 
   const categories: CategoryUsage[] = [
     { category: "Development",   duration_seconds: 9600 },
@@ -152,8 +153,6 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
     date: today,
     total_active_seconds: totalActive,
     total_idle_seconds: 3600,
-    productive_seconds: productive,
-    productivity_score: Math.round(productive / Math.max(1, totalActive) * 100),
     apps: mockApps,
     categories,
   };
@@ -165,8 +164,7 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
       date: d.toISOString().split("T")[0],
       active_seconds: Math.round(active),
       idle_seconds: Math.round(active * 0.2),
-      productive_seconds: Math.round(active * (0.4 + Math.random() * 0.4)),
-     };
+    };
   });
 
   switch (cmd) {
@@ -219,7 +217,7 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
     case "is_tracking_paused":    return false;
     case "get_current_session":   return { current_app: "VS Code", session_start: new Date().toISOString(), is_idle: false };
     case "move_database":         return args?.newPath ?? "";
-    case "reset_database_path":   return " C:\\Program Files\\FocusPulse\\Database\\focuspulse.db";
+    case "reset_database_path":   return "C:\\ProgramData\\WinTrack\\Database\\wintrack.db";
 
     case "set_app_ignored": {
       const app_id = Number(args?.appId ?? -1);

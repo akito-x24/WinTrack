@@ -29,6 +29,7 @@ interface AppStore {
   updateAppCategory: (id: number, cat: string) => Promise<void>;
   updateAppDisplayName: (id: number, name: string) => Promise<void>;
   setAppIgnored: (id: number, ignored: boolean) => Promise<void>;
+  updateAppDailyLimit: (id: number, limit: number | null) => Promise<void>;
   toggleTracking: () => Promise<void>;
 
   refreshAll: () => Promise<void>;
@@ -83,33 +84,33 @@ export const useStore = create<AppStore>((set, get) => ({
   },
 
   fetchSettings: async () => {
-    try { set({ settings: await api.getSettings() }); } catch {}
+    try { set({ settings: await api.getSettings() }); } catch { }
   },
 
   fetchCurrentSession: async () => {
     try {
       const [data, paused] = await Promise.all([api.getCurrentSession(), api.isTrackingPaused()]);
       set({ currentSession: data, isTrackingPaused: paused });
-    } catch {}
+    } catch { }
   },
 
- updateSettings: async (updates) => {
-  // 1. If autostart preference is changing, call the OS API
-  if (updates.launch_on_startup !== undefined) {
-    try {
-      await api.setAutostart(updates.launch_on_startup);
-    } catch (e) {
-      console.error("Failed to update autostart:", e);
+  updateSettings: async (updates) => {
+    // 1. If autostart preference is changing, call the OS API
+    if (updates.launch_on_startup !== undefined) {
+      try {
+        await api.setAutostart(updates.launch_on_startup);
+      } catch (e) {
+        console.error("Failed to update autostart:", e);
+      }
     }
-  }
 
-  // 2. Save to DB
-  await api.updateSettings(updates);
-  
-  // 3. Refresh state
-  await get().fetchSettings();
-},
-  
+    // 2. Save to DB
+    await api.updateSettings(updates);
+
+    // 3. Refresh state
+    await get().fetchSettings();
+  },
+
 
   updateAppCategory: async (id, category) => {
     await api.updateAppCategory(id, category);
@@ -124,6 +125,14 @@ export const useStore = create<AppStore>((set, get) => ({
   setAppIgnored: async (id, ignored) => {
     await api.setAppIgnored(id, ignored);
     await Promise.all([get().fetchAppList(), get().fetchTodayStats()]);
+  },
+
+  updateAppDailyLimit: async (id, limit) => {
+    await api.updateAppDailyLimit(id, limit);
+    await Promise.all([
+      get().fetchAppList(),
+      get().fetchTodayStats(),
+    ]);
   },
 
   toggleTracking: async () => {

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "FocusPulse",
-  "version": "1.0.0",
-  "identifier": "com.focuspulse.tracker",
+  "productName": "WinTrack",
+  "version": "2.0.0",
+  "identifier": "com.wintrack.tracker",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "FocusPulse",
+        "title": "WinTrack",
         "width": 1280,
         "height": 820,
         "minWidth": 960,
@@ -49,10 +49,10 @@
         "displayLanguageSelector": false
       }
     },
-    "publisher": "FocusPulse",
-    "copyright": "Copyright © 2026 FocusPulse",
+    "publisher": "WinTrack",
+    "copyright": "Copyright © 2026 WinTrack",
     "category": "Utility",
-    "shortDescription": "Screen Time & Focus Tracker for Windows",
-    "longDescription": "FocusPulse monitors your application usage, tracks focus time, and helps you understand and improve your digital habits. Fully offline, no cloud, no telemetry."
+    "shortDescription": "Application Usage Tracker for Windows",
+    "longDescription": "WinTrack monitors application usage and provides detailed analytics about how you use your PC. Fully offline, no cloud, no telemetry."
   }
 }

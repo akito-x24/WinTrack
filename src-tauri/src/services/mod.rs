@@ -1,6 +1,5 @@
 use crate::database::Database;
 use anyhow::Result;
-use std::env;
 
 pub struct AppState {
     pub db: Database,
@@ -63,11 +62,5 @@ pub fn resolve_db_path() -> String {
 }
 
 pub fn default_db_path() -> String {
-    if let Ok(appdata) = env::var("APPDATA") {
-        return format!("{}\\FocusPulse\\focuspulse.db", appdata);
-    }
-    if let Ok(home) = env::var("HOME") {
-        return format!("{}/.local/share/focuspulse/focuspulse.db", home);
-    }
-    "./focuspulse.db".to_string()
+    "C:\\ProgramData\\WinTrack\\Database\\wintrack.db".to_string()
 }

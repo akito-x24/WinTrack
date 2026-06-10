@@ -12,7 +12,7 @@ target/
 *.db
 *.sqlite
 *.sqlite3
-focuspulse.db
+wintrack.db
 *.log
 *.csv
 src-tauri/%USERPROFILE%/

@@ -17,7 +17,6 @@ function buildFullWeek(weekStart: string, stats: WeeklyStats | null): DayStats[]
       date: dateStr,
       active_seconds: 0,
       idle_seconds: 0,
-      productive_seconds: 0,
     };
   });
 }
@@ -40,7 +39,6 @@ export default function WeeklyAnalytics() {
   const fullWeek = buildFullWeek(weekStart, stats);
 
   const totalActive     = fullWeek.reduce((s, d) => s + d.active_seconds, 0);
-  const totalProductive = fullWeek.reduce((s, d) => s + d.productive_seconds, 0);
   const activeDays      = fullWeek.filter(d => d.active_seconds > 0).length;
   const avgDaily        = activeDays ? Math.round(totalActive / activeDays) : 0;
 
@@ -76,10 +74,11 @@ export default function WeeklyAnalytics() {
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Total Active"  value={formatDuration(totalActive)}     accent="#3b82f6" />
-            <StatCard label="Productive"    value={formatDuration(totalProductive)} accent="#22c55e" />
-            <StatCard label="Daily Avg"     value={formatDuration(avgDaily)}        accent="#8b5cf6"
-              sub={activeDays ? `across ${activeDays} active day${activeDays !== 1 ? "s" : ""}` : "no activity yet"} />
+
+            <StatCard label="Total Active"  value={formatDuration(totalActive)}  accent="#3b82f6"/>
+            <StatCard label="Apps Used" value={String(stats?.top_apps?.length ?? 0)} sub="Unique tracked apps" accent="#22c55e"/>
+            <StatCard label="Daily Avg" value={formatDuration(avgDaily)} accent="#8b5cf6" 
+            sub={activeDays ? `across ${activeDays} active day${activeDays !== 1 ? "s" : ""}`: "no activity yet"  }/>
           </div>
 
           {/* Chart — always shows all 7 days */}

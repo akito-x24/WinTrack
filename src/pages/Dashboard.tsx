@@ -1,7 +1,10 @@
 import { useStore } from "../store";
 import {
-  StatCard, ProductivityRing, AppRow, SectionHeader,
-  EmptyState, LoadingSpinner,
+  StatCard,
+  AppRow,
+  SectionHeader,
+  EmptyState,
+  LoadingSpinner,
 } from "../components/ui";
 import CategoryPieChart from "../components/charts/CategoryPieChart";
 import WeeklyBarChart from "../components/charts/WeeklyBarChart";
@@ -26,29 +29,31 @@ export default function Dashboard() {
           sub={`${Math.round((stats?.total_active_seconds ?? 0) / 3600 * 10) / 10}h today`}
           accent="#3b82f6"
         />
+
         <StatCard
-          label="Productive Time"
-          value={formatDuration(stats?.productive_seconds ?? 0)}
-          sub={`${stats?.productivity_score ?? 0}% of active time`}
+          label="Daily Average"
+          value="Coming Soon"
+          sub="30-day average"
           accent="#22c55e"
         />
+
         <StatCard
-          label="Idle Time"
-          value={formatDuration(stats?.total_idle_seconds ?? 0)}
-          sub="Mouse & keyboard inactive"
-          accent="#f59e0b"
+          label="Apps Used"
+          value={String(stats?.apps?.length ?? 0)}
+          sub="Tracked today"
+          accent="#8b5cf6"
         />
-        <div className="fp-card flex items-center gap-4">
-          <ProductivityRing score={stats?.productivity_score ?? 0} size={80} />
-          <div>
-            <div className="fp-label mb-1">Focus Score</div>
-            <div className="text-lg font-semibold text-fp-text">
-              {(stats?.productivity_score ?? 0) >= 70 ? "Excellent"
-                : (stats?.productivity_score ?? 0) >= 50 ? "Good" : "Low"}
-            </div>
-            <div className="text-xs text-fp-muted">today</div>
-          </div>
-        </div>
+
+        <StatCard
+          label="Top App"
+          value={stats?.apps?.[0]?.app_name ?? "None"}
+          sub={
+            stats?.apps?.[0]
+              ? formatDuration(stats.apps[0].duration_seconds)
+              : "No usage"
+          }
+          accent="#06b6d4"
+        />
       </div>
 
       {/* Main content grid */}
@@ -90,16 +95,33 @@ export default function Dashboard() {
         <HourlyHeatmap date={today} />
       </div>
 
-      {/* Weekly trend — always show all 7 days */}
+      {/* Weekly trend */}
       <div className="fp-card">
         <SectionHeader title="This Week" />
-        <WeeklyBarChart data={Array.from({ length: 7 }, (_, i) => {
-          const d = new Date();
-          d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -6 : 1) + i);
-          const dateStr = d.toISOString().split("T")[0];
-          const existing = weeklyStats?.days.find(x => x.date === dateStr);
-          return existing ?? { date: dateStr, active_seconds: 0, idle_seconds: 0, productive_seconds: 0 };
-        })} />
+        <WeeklyBarChart
+          data={Array.from({ length: 7 }, (_, i) => {
+            const d = new Date();
+            d.setDate(
+              d.getDate() -
+                d.getDay() +
+                (d.getDay() === 0 ? -6 : 1) +
+                i
+            );
+
+            const dateStr = d.toISOString().split("T")[0];
+            const existing = weeklyStats?.days.find(
+              (x) => x.date === dateStr
+            );
+
+            return (
+              existing ?? {
+                date: dateStr,
+                active_seconds: 0,
+                idle_seconds: 0,
+              }
+            );
+          })}
+        />
       </div>
     </div>
   );

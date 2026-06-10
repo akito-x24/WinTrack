@@ -1,4 +1,4 @@
-# FocusPulse 🎯
+# WinTrack 🎯
 
 > A production-grade Windows screen time tracker — fully offline, no telemetry, no cloud.
 
@@ -6,7 +6,7 @@
 
 ## Overview
 
-FocusPulse monitors which applications you use on your Windows PC, how long you spend in each one, and presents rich analytics so you can understand and improve your digital habits.
+WinTrack monitors which applications you use on your Windows PC, how long you spend in each one, and presents rich analytics so you can understand and improve your digital habits.
 
 Built with **Tauri 2 + Rust + React + TypeScript + SQLite**.
 
@@ -22,7 +22,7 @@ Built with **Tauri 2 + Rust + React + TypeScript + SQLite**.
 - ✅ Dashboard, Daily, Weekly, Monthly analytics
 - ✅ App categorization (manual + auto-heuristics)
 - ✅ Hourly heatmaps, weekly bar charts, category pie charts
-- ✅ Focus streak tracking
+- ✅ WinTrack streak tracking
 - ✅ CSV & JSON export
 - ✅ Database backup
 - ✅ Fully offline — zero internet calls, zero telemetry
@@ -48,7 +48,7 @@ Built with **Tauri 2 + Rust + React + TypeScript + SQLite**.
 ## Folder Structure
 
 ```
-focuspulse/
+wintrack/
 ├── src-tauri/                  # Rust backend
 │   ├── src/
 │   │   ├── lib.rs              # App entry, Tauri commands, setup
@@ -95,7 +95,7 @@ focuspulse/
 
 ```bash
 # 1. Clone / extract the project
-cd focuspulse
+cd wintrack
 
 # 2. Install Node dependencies
 npm install
@@ -121,9 +121,9 @@ npm run tauri build
 ```
 
 Output in `src-tauri/target/release/bundle/`:
-- `nsis/FocusPulse_1.0.0_x64-setup.exe` — NSIS installer
-- `msi/FocusPulse_1.0.0_x64_en-US.msi` — MSI installer
-- `focuspulse.exe` — portable executable
+- `nsis/WinTrack_1.0.0_x64-setup.exe` — NSIS installer
+- `msi/WinTrack_1.0.0_x64_en-US.msi` — MSI installer
+- `wintrack.exe` — portable executable
 
 ---
 
@@ -166,11 +166,11 @@ Handled by `tauri-plugin-autostart`. On Windows this writes a registry key to:
 ```sql
 apps (id, app_name, executable_path, category, first_seen)
 usage_sessions (id, app_id, window_title, start_time, end_time, duration_seconds, was_idle)
-daily_stats (id, date, total_usage_seconds, productive_seconds, distracting_seconds, idle_seconds)
+daily_stats (id, date, total_usage_seconds)
 settings (id, polling_interval_ms, idle_threshold_minutes, launch_on_startup, theme, ...)
 ```
 
-Default location: `%APPDATA%\FocusPulse\focuspulse.db`
+Default location: `%APPDATA%\WinTrack\wintrack.db`
 
 WAL journal mode enabled for concurrent read performance.
 

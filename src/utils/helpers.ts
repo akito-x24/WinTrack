@@ -46,7 +46,7 @@ export function getAppIcon(appName: string): string {
 
 
 /**
- * Returns a color from the FocusPulse blue gradient based on percentage of max.
+ * Returns a color from the WinTrack blue gradient based on percentage of max.
  * Matches the HourlyHeatmap color scheme.
  */
 export function getHeatmapColor(secs: number, max: number): string {
