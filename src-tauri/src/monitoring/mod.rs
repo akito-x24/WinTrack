@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
+use tauri_plugin_notification::NotificationExt;
 
 #[cfg(target_os = "windows")]
 use windows::{
@@ -112,14 +113,14 @@ pub fn get_idle_seconds() -> u64 {
 // ─── WinTrack own exe name (lowercased) — always ignored ───────────────────
 const SELF_EXE: &str = "wintrack.exe";
 
-pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, _handle: AppHandle) {
+pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
     thread::spawn(move || {
         let mut current_app: Option<ForegroundApp> = None;
         let mut session_start: Option<Instant> = None;
         let mut session_start_str: Option<String> = None;
         let mut consecutive_fails: u32 = 0;
 
-        log::info!("WinTrack monitoring loop started");
+        println!("WinTrack monitoring loop started");
 
         loop {
             let (poll_ms, idle_threshold_secs, is_paused) = {
@@ -139,6 +140,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, _handle: AppHandle) {
                 if current_app.is_some() {
                     flush_session(
                         &state,
+                        &handle,
                         &current_app,
                         &session_start,
                         &session_start_str,
@@ -180,10 +182,11 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, _handle: AppHandle) {
             if should_flush {
                 flush_session(
                     &state,
+                    &handle,
                     &current_app,
                     &session_start,
                     &session_start_str,
-                    is_idle,
+                    false,
                 );
                 current_app = None;
                 session_start = None;
@@ -223,6 +226,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, _handle: AppHandle) {
 
 fn flush_session(
     state: &Arc<Mutex<AppState>>,
+    handle: &AppHandle,
     current_app: &Option<ForegroundApp>,
     session_start: &Option<Instant>,
     session_start_str: &Option<String>,
@@ -254,12 +258,28 @@ fn flush_session(
                         if let Ok(Some((today_usage, daily_limit))) =
                             s.db.get_app_limit_status(app_id)
                         {
-                            log::info!(
-                                "LIMIT CHECK: {} usage={}s limit={}m",
-                                app.app_name,
-                                today_usage,
-                                daily_limit
-                            );
+                            let limit_seconds = daily_limit * 60;
+
+                            if today_usage >= limit_seconds {
+                                let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+                                if s.db
+                                    .should_send_limit_notification(app_id, &today)
+                                    .unwrap_or(false)
+                                {
+                                    let _ = handle
+                                        .notification()
+                                        .builder()
+                                        .title("Daily Limit Reached")
+                                        .body(&format!(
+                                            "{} has reached its daily limit.",
+                                            app.app_name
+                                        ))
+                                        .show();
+
+                                    let _ = s.db.mark_limit_notification_sent(app_id, &today);
+                                }
+                            }
                         }
                         log::debug!(
                             "Flushed: {} ({}s idle={})",
