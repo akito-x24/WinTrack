@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 use tauri_plugin_notification::NotificationExt;
 
-
 #[cfg(target_os = "windows")]
 use windows::{
     core::PWSTR,
@@ -319,7 +318,7 @@ fn flush_session(
                                             if let Ok(count) = s.db.get_soft_lock_counter(app_id) {
                                                 println!(
                                                     "SOFT LOCK COUNT: {} -> {}",
-                                                    app.app_name, count
+                                                    display_name, count
                                                 );
 
                                                 const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 3;
@@ -339,9 +338,9 @@ fn flush_session(
                                                             "soft-lock",
                                                             tauri::WebviewUrl::App("/".into()),
                                                         )
-                                                        .title("Soft Lock")
                                                         .inner_size(500.0, 300.0)
-                                                        .resizable(false)
+                                                        .resizable(true)
+                                                        .focus()
                                                         .center()
                                                         .build();
                                                     }

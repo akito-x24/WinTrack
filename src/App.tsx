@@ -58,7 +58,11 @@ export default function App() {
   useEffect(() => {
     const label = getCurrentWindow().label;
 
-    if (label.startsWith("soft-lock")) {
+    // if (label.startsWith("soft-lock")) {
+    if (
+      label.startsWith("soft-lock") ||
+      label === "soft-lock-test"
+    ) {
       setIsSoftLockWindow(true);
     }
   }, []);

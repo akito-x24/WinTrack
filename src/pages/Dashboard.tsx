@@ -10,6 +10,7 @@ import CategoryPieChart from "../components/charts/CategoryPieChart";
 import WeeklyBarChart from "../components/charts/WeeklyBarChart";
 import HourlyHeatmap from "../components/charts/HourlyHeatmap";
 import { formatDuration, todayString } from "../utils/helpers";
+import type { MonthlyStats } from "../types";
 
 export default function Dashboard() {
   const { todayStats, weeklyStats, loading } = useStore();

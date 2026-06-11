@@ -2,7 +2,11 @@
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "main-capability",
   "description": "Main window capabilities",
-  "windows": ["main"],
+  "windows": [
+    "main",
+    "soft-lock",
+    "soft-lock-test"
+  ],
   "permissions": [
     "core:default",
     "dialog:allow-open",
@@ -12,6 +16,7 @@
     "shell:allow-open",
     "autostart:allow-enable",
     "autostart:allow-disable",
-    "autostart:allow-is-enabled"
+    "autostart:allow-is-enabled",
+    "core:window:allow-close"
   ]
 }
