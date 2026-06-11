@@ -509,6 +509,44 @@ impl Database {
         }
     }
 
+    pub fn increment_soft_lock_counter(&self, app_id: i64) -> Result<()> {
+        self.conn.execute(
+            "
+        UPDATE apps
+        SET soft_lock_reminder_count =
+            soft_lock_reminder_count + 1
+        WHERE id = ?1
+        ",
+            params![app_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_soft_lock_counter(&self, app_id: i64) -> Result<i64> {
+        let count = self.conn.query_row(
+            "
+        SELECT soft_lock_reminder_count
+        FROM apps
+        WHERE id = ?1
+        ",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+        Ok(count)
+    }
+
+    pub fn reset_soft_lock_counter(&self, app_id: i64) -> Result<()> {
+        self.conn.execute(
+            "
+        UPDATE apps
+        SET soft_lock_reminder_count = 0
+        WHERE id = ?1
+        ",
+            params![app_id],
+        )?;
+        Ok(())
+    }
+
     pub fn get_daily_usage(&self, date: &str) -> Result<Value> {
         let mut stmt = self.conn.prepare(
             "SELECT COALESCE(a.display_name, a.app_name), a.executable_path, a.category,

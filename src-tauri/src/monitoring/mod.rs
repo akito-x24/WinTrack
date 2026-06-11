@@ -309,6 +309,11 @@ fn flush_session(
 
                                         let _ = s.db.mark_reminder_sent(app_id, today_usage);
                                     }
+                                    let _ = s.db.increment_soft_lock_counter(app_id);
+
+                                    if let Ok(count) = s.db.get_soft_lock_counter(app_id) {
+                                        println!("SOFT LOCK COUNT: {} -> {}", app.app_name, count);
+                                    }
                                 }
                             }
                         }
