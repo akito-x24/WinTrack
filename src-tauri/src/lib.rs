@@ -231,6 +231,16 @@ async fn backup_database(
 }
 
 #[tauri::command]
+async fn close_process(process_name: String) -> Result<(), String> {
+    std::process::Command::new("taskkill")
+        .args(["/F", "/T", "/IM", &process_name])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_current_session(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<serde_json::Value, String> {
@@ -402,6 +412,7 @@ pub fn run() {
             is_tracking_paused,
             export_data,
             get_timeline,
+            close_process,
             backup_database,
             get_current_session,
             move_database,

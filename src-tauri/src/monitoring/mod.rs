@@ -321,7 +321,7 @@ fn flush_session(
                                                     display_name, count
                                                 );
 
-                                                const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 3;
+                                                const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 1;
 
                                                 if count >= SOFT_LOCK_TRIGGER_REMINDERS {
                                                     println!(
@@ -333,14 +333,19 @@ fn flush_session(
                                                         .get_webview_window("soft-lock")
                                                         .is_none()
                                                     {
+                                                        let url = format!(
+                                                            "/?softlock=1&app={}&process={}",
+                                                            urlencoding::encode(&display_name),
+                                                            urlencoding::encode(&app.app_name)
+                                                        );
+
                                                         let _ = WebviewWindowBuilder::new(
                                                             handle,
                                                             "soft-lock",
-                                                            tauri::WebviewUrl::App("/".into()),
+                                                            tauri::WebviewUrl::App(url.into()),
                                                         )
                                                         .inner_size(500.0, 300.0)
                                                         .resizable(true)
-                                                        .focus()
                                                         .center()
                                                         .build();
                                                     }
