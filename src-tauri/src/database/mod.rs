@@ -166,6 +166,24 @@ impl Database {
             )?;
             log::info!("Migration: added apps.soft_lock_enabled");
         }
+
+        let has_soft_lock_reminder_count: bool = self
+    .conn
+    .query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='soft_lock_reminder_count'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+    > 0;
+
+        if !has_soft_lock_reminder_count {
+            self.conn.execute_batch(
+                "ALTER TABLE apps ADD COLUMN soft_lock_reminder_count INTEGER NOT NULL DEFAULT 0;",
+            )?;
+            log::info!("Migration: added apps.soft_lock_reminder_count");
+        }
+
         // limit_notification_sent
         let has_limit_notification_sent: bool = self
     .conn
@@ -521,6 +539,20 @@ impl Database {
         )?;
 
         Ok(enabled)
+    }
+
+    pub fn get_app_display_name(&self, app_id: i64) -> Result<String> {
+        let name = self.conn.query_row(
+            "
+        SELECT COALESCE(display_name, app_name)
+        FROM apps
+        WHERE id = ?1
+        ",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+
+        Ok(name)
     }
 
     pub fn increment_soft_lock_counter(&self, app_id: i64) -> Result<()> {

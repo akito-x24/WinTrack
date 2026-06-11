@@ -3,8 +3,9 @@ use chrono::Local;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 use tauri_plugin_notification::NotificationExt;
+
 
 #[cfg(target_os = "windows")]
 use windows::{
@@ -245,6 +246,9 @@ fn flush_session(
         if let Ok(s) = state.lock() {
             match s.db.upsert_app(&app.app_name, &app.executable_path) {
                 Ok((app_id, is_ignored)) => {
+                    let display_name =
+                        s.db.get_app_display_name(app_id)
+                            .unwrap_or_else(|_| app.app_name.clone());
                     // Double-check ignored flag (could have changed at runtime)
                     if !is_ignored {
                         let _ = s.db.insert_session(
@@ -274,7 +278,7 @@ fn flush_session(
                                         .title("Daily Limit Reached")
                                         .body(&format!(
                                             "{} has reached its daily limit.",
-                                            app.app_name
+                                            display_name
                                         ))
                                         .show();
 
@@ -303,7 +307,7 @@ fn flush_session(
                                             .title("Reminder")
                                             .body(&format!(
                                                 "You're still using {} after exceeding its limit.",
-                                                app.app_name
+                                                display_name
                                             ))
                                             .show();
 
@@ -323,18 +327,24 @@ fn flush_session(
                                                 if count >= SOFT_LOCK_TRIGGER_REMINDERS {
                                                     println!(
                                                         "SOFT LOCK TRIGGERED: {}",
-                                                        app.app_name
+                                                        display_name
                                                     );
 
-                                                    let _ = handle
-                                                        .notification()
-                                                        .builder()
-                                                        .title("Soft Lock Triggered")
-                                                        .body(&format!(
-                                                            "{} exceeded its limit and would be soft locked.",
-                                                                app.app_name
-                                                            ))
-                                                        .show();
+                                                    if handle
+                                                        .get_webview_window("soft-lock")
+                                                        .is_none()
+                                                    {
+                                                        let _ = WebviewWindowBuilder::new(
+                                                            handle,
+                                                            "soft-lock",
+                                                            tauri::WebviewUrl::App("/".into()),
+                                                        )
+                                                        .title("Soft Lock")
+                                                        .inner_size(500.0, 300.0)
+                                                        .resizable(false)
+                                                        .center()
+                                                        .build();
+                                                    }
 
                                                     let _ = s.db.reset_soft_lock_counter(app_id);
                                                 }
