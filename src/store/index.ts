@@ -144,6 +144,15 @@ export const useStore = create<AppStore>((set, get) => ({
     ]);
   },
 
+  updateAppSoftLockEnabled: async (id: number, enabled: boolean) => {
+    await api.updateAppSoftLockEnabled(id, enabled);
+
+    await Promise.all([
+      get().fetchAppList(),
+      get().fetchTodayStats(),
+    ]);
+  },
+
   toggleTracking: async () => {
     const paused = get().isTrackingPaused;
     if (paused) await api.resumeTracking(); else await api.pauseTracking();

@@ -143,6 +143,7 @@ export default function AppBreakdown() {
                   <th className="px-4 py-3 text-right">Category</th>
                   <th className="px-4 py-3 text-right">Limit</th>
                   <th className="px-4 py-3 text-right">Reminder</th>
+                  <th className="px-4 py-3 text-right">Soft Lock</th>
                   <th className="px-4 py-3 text-right">Status</th>
                   <th className="w-20 px-5 py-3 text-center">Ignore</th>
                 </tr>
@@ -182,10 +183,9 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
   const initials = getAppInitials(app.app_name);
   const [nameInput, setNameInput] = useState(app.display_name);
   const [editingLimit, setEditingLimit] = useState(false);
-  const [limitInput, setLimitInput] = useState(
-    app.daily_limit_minutes?.toString() ?? ""
-  );
+  const [limitInput, setLimitInput] = useState(app.daily_limit_minutes?.toString() ?? "");
   const [editingReminder, setEditingReminder] = useState(false);
+  const [editingSoftLock, setEditingSoftLock] = useState(false);
 
   useEffect(() => { setNameInput(app.display_name); }, [app.display_name]);
 
@@ -378,6 +378,37 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
             {app.reminder_interval_minutes
               ? `${app.reminder_interval_minutes}m`
               : "Off"}
+          </button>
+        )}
+      </td>
+
+      {/* Soft Lock */}
+      <td className="px-4 py-3 text-right">
+        {editingSoftLock ? (
+          <select
+            autoFocus
+            defaultValue={app.soft_lock_enabled ? "on" : "off"}
+            onChange={async (e) => {
+              await useStore
+                .getState()
+                .updateAppSoftLockEnabled(
+                  app.id,
+                  e.target.value === "on"
+                );
+
+              setEditingSoftLock(false);
+            }}
+            className="bg-fp-card border border-fp-border text-fp-text text-xs rounded-lg px-2 py-1"
+          >
+            <option value="off">Off</option>
+            <option value="on">On</option>
+          </select>
+        ) : (
+          <button
+            onClick={() => setEditingSoftLock(true)}
+            className="text-xs text-fp-accent hover:underline rounded px-2 py-1 bg-fp-accent/0 transition-colors duration-200 hover:bg-fp-accent/10"
+          >
+            {app.soft_lock_enabled ? "On" : "Off"}
           </button>
         )}
       </td>

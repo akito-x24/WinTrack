@@ -31,6 +31,7 @@ export const api = {
   updateAppDisplayName: (app_id: number, display_name: string) => call<boolean>("update_app_display_name", { appId: app_id, displayName: display_name }),
   setAppIgnored:        (app_id: number, ignored: boolean) => call<boolean>("set_app_ignored", { appId: app_id, ignored }),
   updateAppReminderInterval: (app_id: number, interval_minutes: number) => call<boolean>("update_app_reminder_interval", {appId: app_id, intervalMinutes: interval_minutes}),
+  updateAppSoftLockEnabled: (app_id: number, enabled: boolean) => call<boolean>("set_app_soft_lock_enabled", {appId: app_id, enabled}),
   updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", {appId: app_id, limitMinutes: limit_minutes}),
 
   updateSettings:  (settings: Partial<Settings>) => call<boolean>("update_settings", { settings }),
