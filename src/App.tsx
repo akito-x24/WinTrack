@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "./store";
 import Sidebar from "./components/layout/Sidebar";
 import Header from "./components/layout/Header";
@@ -10,6 +10,8 @@ import AppBreakdown from "./pages/AppBreakdown";
 import TimelineView from "./pages/TimelineView";
 import SettingsPage from "./pages/SettingsPage";
 import ExportCenter from "./pages/ExportCenter";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import SoftLockPage from "./pages/SoftLockPage";
 
 // 🔍 Component to handle Theme changes
 function ThemeHandler() {
@@ -17,7 +19,7 @@ function ThemeHandler() {
 
   useEffect(() => {
     const root = document.documentElement;
-    
+
     // Clean slate
     root.classList.remove("dark");
 
@@ -27,7 +29,7 @@ function ThemeHandler() {
       // Check system preference
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       if (mediaQuery.matches) root.classList.add("dark");
-      
+
       // Listen for changes
       const handler = (e: MediaQueryListEvent) => {
         if (e.matches) root.classList.add("dark");
@@ -44,6 +46,22 @@ function ThemeHandler() {
 
 export default function App() {
   const { view, refreshAll, fetchSettings, fetchAppList } = useStore();
+  const [isSoftLockWindow, setIsSoftLockWindow] = useState(false);
+
+  // useEffect(() => {
+  //   const label = getCurrentWindow().label;
+
+  //   if (label === "soft-lock") {
+  //     setIsSoftLockWindow(true);
+  //   }
+  // }, []);
+  useEffect(() => {
+    const label = getCurrentWindow().label;
+
+    if (label.startsWith("soft-lock")) {
+      setIsSoftLockWindow(true);
+    }
+  }, []);
 
   useEffect(() => {
     refreshAll();
@@ -56,20 +74,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  
+
   const renderPage = () => {
     switch (view) {
       case "dashboard": return <Dashboard />;
-      case "daily":     return <DailyAnalytics />;
-      case "weekly":    return <WeeklyAnalytics />;
-      case "monthly":   return <MonthlyAnalytics />;
-      case "apps":      return <AppBreakdown />;
-      case "timeline":  return <TimelineView />;
-      case "settings":  return <SettingsPage />;
-      case "export":    return <ExportCenter />;
-      default:          return <Dashboard />;
+      case "daily": return <DailyAnalytics />;
+      case "weekly": return <WeeklyAnalytics />;
+      case "monthly": return <MonthlyAnalytics />;
+      case "apps": return <AppBreakdown />;
+      case "timeline": return <TimelineView />;
+      case "settings": return <SettingsPage />;
+      case "export": return <ExportCenter />;
+      default: return <Dashboard />;
     }
   };
+
+  if (isSoftLockWindow) {
+    return <SoftLockPage />;
+  }
 
   return (
     <div className="flex h-screen bg-fp-bg text-fp-text font-sans">

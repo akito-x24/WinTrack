@@ -31,6 +31,7 @@ interface AppStore {
   setAppIgnored: (id: number, ignored: boolean) => Promise<void>;
   updateAppDailyLimit: (id: number, limit: number | null) => Promise<void>;
   updateAppReminderInterval: (id: number, interval: number) => Promise<void>;
+  updateAppSoftLockEnabled: (id: number, enabled: boolean) => Promise<void>;
   toggleTracking: () => Promise<void>;
 
   refreshAll: () => Promise<void>;
