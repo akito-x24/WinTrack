@@ -263,6 +263,7 @@ fn flush_session(
                             if today_usage >= limit_seconds {
                                 let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
+                                // First limit notification
                                 if s.db
                                     .should_send_limit_notification(app_id, &today)
                                     .unwrap_or(false)
@@ -278,6 +279,36 @@ fn flush_session(
                                         .show();
 
                                     let _ = s.db.mark_limit_notification_sent(app_id, &today);
+
+                                    // Start reminder tracking from current usage
+                                    let _ = s.db.mark_reminder_sent(app_id, today_usage);
+                                }
+                                // Reminder notifications
+                                else if daily_limit > 0 {
+                                    let reminder_interval =
+                                        s.db.get_app_reminder_interval(app_id).unwrap_or(0);
+
+                                    if reminder_interval > 0
+                                        && s.db
+                                            .should_send_reminder(
+                                                app_id,
+                                                today_usage,
+                                                reminder_interval,
+                                            )
+                                            .unwrap_or(false)
+                                    {
+                                        let _ = handle
+                                            .notification()
+                                            .builder()
+                                            .title("Reminder")
+                                            .body(&format!(
+                                                "You're still using {} after exceeding its limit.",
+                                                app.app_name
+                                            ))
+                                            .show();
+
+                                        let _ = s.db.mark_reminder_sent(app_id, today_usage);
+                                    }
                                 }
                             }
                         }

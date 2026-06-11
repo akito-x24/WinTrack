@@ -201,6 +201,41 @@ impl Database {
             log::info!("Migration: added apps.last_limit_notification_date");
         }
 
+        // Newly added
+        let has_last_reminder_notification_date: bool = self
+    .conn
+    .query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='last_reminder_notification_date'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+    > 0;
+
+        if !has_last_reminder_notification_date {
+            self.conn.execute_batch(
+                "ALTER TABLE apps ADD COLUMN last_reminder_notification_date TEXT;",
+            )?;
+            log::info!("Migration: added apps.last_reminder_notification_date");
+        }
+
+        let has_last_reminder_usage_seconds: bool = self
+    .conn
+    .query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='last_reminder_usage_seconds'",
+        [],
+        |r| r.get::<_, i64>(0),
+    )
+    .unwrap_or(0)
+    > 0;
+
+        if !has_last_reminder_usage_seconds {
+            self.conn.execute_batch(
+        "ALTER TABLE apps ADD COLUMN last_reminder_usage_seconds INTEGER NOT NULL DEFAULT 0;",
+    )?;
+            log::info!("Migration: added apps.last_reminder_usage_seconds");
+        }
+
         Ok(())
     }
 
@@ -246,6 +281,21 @@ impl Database {
         Ok(())
     }
 
+    /// Get reminder interval in minutes for an app.
+    pub fn get_app_reminder_interval(&self, app_id: i64) -> Result<i64> {
+        let interval = self.conn.query_row(
+            "
+        SELECT reminder_interval_minutes
+        FROM apps
+        WHERE id = ?1
+        ",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+
+        Ok(interval)
+    }
+
     /// Enable or disable soft lock for an app.
     pub fn set_app_soft_lock_enabled(&self, app_id: i64, enabled: bool) -> Result<()> {
         self.conn.execute(
@@ -279,6 +329,36 @@ impl Database {
              last_limit_notification_date = ?1
          WHERE id = ?2",
             params![today, app_id],
+        )?;
+
+        Ok(())
+    }
+
+    pub fn should_send_reminder(
+        &self,
+        app_id: i64,
+        today_usage: i64,
+        reminder_interval_minutes: i64,
+    ) -> Result<bool> {
+        let last_usage: i64 = self.conn.query_row(
+            "SELECT last_reminder_usage_seconds
+         FROM apps
+         WHERE id = ?1",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+
+        Ok(today_usage - last_usage >= reminder_interval_minutes * 60)
+    }
+
+    pub fn mark_reminder_sent(&self, app_id: i64, today_usage: i64) -> Result<()> {
+        self.conn.execute(
+            "
+        UPDATE apps
+        SET last_reminder_usage_seconds = ?1
+        WHERE id = ?2
+        ",
+            params![today_usage, app_id],
         )?;
 
         Ok(())
