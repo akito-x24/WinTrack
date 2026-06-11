@@ -35,9 +35,9 @@ export default function DailyAnalytics() {
 
   const avgSeconds = weeklyStats?.days?.length
     ? Math.round(
-        weeklyStats.days.reduce((sum, day) => sum + day.active_seconds, 0) /
-          weeklyStats.days.length
-      )
+      weeklyStats.days.reduce((sum, day) => sum + day.active_seconds, 0) /
+      weeklyStats.days.length
+    )
     : 0;
 
   const topApp = stats?.apps?.[0];
@@ -134,7 +134,10 @@ export default function DailyAnalytics() {
             </div>
             <div className="fp-card">
               <SectionHeader title="Categories" />
-              <CategoryPieChart data={stats.categories} />
+              <CategoryPieChart
+                categories={stats.categories}
+                apps={stats.apps}
+              />
             </div>
           </div>
         </>

@@ -26,7 +26,7 @@ export default {
           social: "#8b5cf6",
           gaming: "#ef4444",
           development: "#3b82f6",
-          study: "#06b6d4",
+          study: "#f313eb",
           other: "#64748b",
         },
       },

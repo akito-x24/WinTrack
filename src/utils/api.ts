@@ -34,6 +34,8 @@ export const api = {
   updateAppSoftLockEnabled: (app_id: number, enabled: boolean) => call<boolean>("set_app_soft_lock_enabled", {appId: app_id, enabled}),
   updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", {appId: app_id, limitMinutes: limit_minutes}),
 
+  closeProcess: (process_name: string) => call<void>("close_process", { processName: process_name }),
+
   updateSettings:  (settings: Partial<Settings>) => call<boolean>("update_settings", { settings }),
   pauseTracking:   () => call<boolean>("pause_tracking"),
   resumeTracking:  () => call<boolean>("resume_tracking"),

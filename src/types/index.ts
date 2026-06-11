@@ -107,7 +107,7 @@ export const CATEGORY_COLORS: Record<AppCategory, string> = {
   Social: "#8b5cf6",
   Gaming: "#ef4444",
   Development: "#3b82f6",
-  Study: "#06b6d4",
+  Study: "#f313eb",
   Other: "#64748b",
 };
 

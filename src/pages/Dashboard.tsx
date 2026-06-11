@@ -83,7 +83,7 @@ export default function Dashboard() {
         <div className="fp-card">
           <SectionHeader title="By Category" />
           {stats?.categories ? (
-            <CategoryPieChart data={stats.categories} />
+            <CategoryPieChart categories={stats.categories} apps={stats.apps}/>
           ) : (
             <EmptyState />
           )}
