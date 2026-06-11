@@ -309,29 +309,35 @@ fn flush_session(
 
                                         let _ = s.db.mark_reminder_sent(app_id, today_usage);
 
-                                        let _ = s.db.increment_soft_lock_counter(app_id);
+                                        if s.db.is_soft_lock_enabled(app_id).unwrap_or(false) {
+                                            let _ = s.db.increment_soft_lock_counter(app_id);
 
-                                        if let Ok(count) = s.db.get_soft_lock_counter(app_id) {
-                                            println!(
-                                                "SOFT LOCK COUNT: {} -> {}",
-                                                app.app_name, count
-                                            );
+                                            if let Ok(count) = s.db.get_soft_lock_counter(app_id) {
+                                                println!(
+                                                    "SOFT LOCK COUNT: {} -> {}",
+                                                    app.app_name, count
+                                                );
 
-                                            const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 3;
+                                                const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 3;
 
-                                            if count >= SOFT_LOCK_TRIGGER_REMINDERS {
-                                                println!("SOFT LOCK TRIGGERED: {}", app.app_name);
+                                                if count >= SOFT_LOCK_TRIGGER_REMINDERS {
+                                                    println!(
+                                                        "SOFT LOCK TRIGGERED: {}",
+                                                        app.app_name
+                                                    );
 
-                                                let _ = handle
-                                                    .notification()
-                                                    .builder()
-                                                    .title("Soft Lock Triggered")
-                                                    .body(&format!(
+                                                    let _ = handle
+                                                        .notification()
+                                                        .builder()
+                                                        .title("Soft Lock Triggered")
+                                                        .body(&format!(
                                                             "{} exceeded its limit and would be soft locked.",
                                                                 app.app_name
-                                                        ))
-                                                    .show();
-                                                let _ = s.db.reset_soft_lock_counter(app_id);
+                                                            ))
+                                                        .show();
+
+                                                    let _ = s.db.reset_soft_lock_counter(app_id);
+                                                }
                                             }
                                         }
                                     }

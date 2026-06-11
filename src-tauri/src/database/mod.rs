@@ -509,6 +509,20 @@ impl Database {
         }
     }
 
+    pub fn is_soft_lock_enabled(&self, app_id: i64) -> Result<bool> {
+        let enabled = self.conn.query_row(
+            "
+        SELECT soft_lock_enabled
+        FROM apps
+        WHERE id = ?1
+        ",
+            params![app_id],
+            |r| r.get(0),
+        )?;
+
+        Ok(enabled)
+    }
+
     pub fn increment_soft_lock_counter(&self, app_id: i64) -> Result<()> {
         self.conn.execute(
             "
