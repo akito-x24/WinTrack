@@ -373,30 +373,6 @@ pub fn run() {
 
             let handle = app.handle().clone();
 
-
-
-            // Temporary test window for soft lock feature. Can be removed once that is fully implemented and we have a better way to trigger it from the UI.
-            use tauri::WebviewWindowBuilder;
-
-            // let _ = WebviewWindowBuilder::new(
-            //     &handle,
-            //     "soft-lock-test",
-            //     tauri::WebviewUrl::App("/".into()),
-            // )
-            // .title("Soft Lock Test")
-            // .inner_size(500.0, 300.0)
-            // .build();
-            let _ = WebviewWindowBuilder::new(
-                &handle,
-                "soft-lock-test",
-                tauri::WebviewUrl::App("/".into()),
-            )
-            .title("Debug Window")
-            .inner_size(500.0, 300.0)
-            .build();
-
-
-
             monitoring::start_monitoring_loop(state_for_monitor, handle);
             Ok(())
         })
