@@ -1,6 +1,6 @@
 # WinTrack 🎯
 
-> A production-grade Windows screen time tracker — fully offline, no telemetry, no cloud.
+> A production-grade Windows screen time tracker - fully offline, no telemetry, no cloud.
 
 ---
 
@@ -16,8 +16,8 @@ Built with **Tauri 2 + Rust + React + TypeScript + SQLite**.
 
 - ✅ Real-time foreground window detection (Win32 APIs)
 - ✅ Idle detection (mouse + keyboard inactivity)
-- ✅ SQLite local database — supports years of data
-- ✅ System tray integration — tracks even when window is closed
+- ✅ SQLite local database - supports years of data
+- ✅ System tray integration - tracks even when window is closed
 - ✅ Windows startup registration
 - ✅ Dashboard, Daily, Weekly, Monthly analytics
 - ✅ App categorization (manual + auto-heuristics)
@@ -25,7 +25,7 @@ Built with **Tauri 2 + Rust + React + TypeScript + SQLite**.
 - ✅ WinTrack streak tracking
 - ✅ CSV & JSON export
 - ✅ Database backup
-- ✅ Fully offline — zero internet calls, zero telemetry
+- ✅ Fully offline - zero internet calls, zero telemetry
 - ✅ Under 150MB RAM, under 2% CPU at idle
 
 ---
@@ -121,9 +121,9 @@ npm run tauri build
 ```
 
 Output in `src-tauri/target/release/bundle/`:
-- `nsis/WinTrack_1.0.0_x64-setup.exe` — NSIS installer
-- `msi/WinTrack_1.0.0_x64_en-US.msi` — MSI installer
-- `wintrack.exe` — portable executable
+- `nsis/WinTrack_1.0.0_x64-setup.exe` - NSIS installer
+- `msi/WinTrack_1.0.0_x64_en-US.msi` - MSI installer
+- `wintrack.exe` - portable executable
 
 ---
 
@@ -137,7 +137,7 @@ Every 1000ms (configurable), the Rust monitoring thread:
 3. Calls `GetWindowThreadProcessId()` → gets process ID
 4. Calls `QueryFullProcessImageNameW()` → gets full executable path
 5. Calls `GetLastInputInfo()` → checks idle time
-6. Compares current app with previous — if changed, **flushes the session** to SQLite
+6. Compares current app with previous - if changed, **flushes the session** to SQLite
 7. Sessions under 1 second are discarded
 
 ### Data Flow
@@ -178,10 +178,10 @@ WAL journal mode enabled for concurrent read performance.
 
 ## Privacy
 
-- **Zero network calls** — no DNS lookups, no HTTP requests
-- **Zero telemetry** — no crash reporting, no analytics
-- **All data local** — SQLite file on your machine only
-- **Open architecture** — inspect every Rust command and SQL query
+- **Zero network calls** - no DNS lookups, no HTTP requests
+- **Zero telemetry** - no crash reporting, no analytics
+- **All data local** - SQLite file on your machine only
+- **Open architecture** - inspect every Rust command and SQL query
 
 ---
 

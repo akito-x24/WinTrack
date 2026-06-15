@@ -26,13 +26,6 @@ export default function AppBreakdown() {
 
   useEffect(() => { fetchAppList(); }, []);
 
-  // const filtered = (appList ?? []).filter(app => {
-  //   if (!showIgnored && app.is_ignored) return false;
-  //   const matchSearch = app.display_name.toLowerCase().includes(search.toLowerCase())
-  //     || app.app_name.toLowerCase().includes(search.toLowerCase());
-  //   const matchCat = catFilter === "All" || app.category === catFilter;
-  //   return matchSearch && matchCat;
-  // });
   const filtered = (appList ?? [])
     .filter(app => {
       if (!showIgnored && app.is_ignored) return false;
@@ -227,16 +220,28 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
                   <button onClick={onClose} className="text-xs text-fp-red hover:text-fp-red/80">✕</button>
                 </div>
               ) : (
+                // <div className="flex items-center gap-1.5 group/name">
+                //   <span className="text-sm font-medium text-fp-text truncate">{app.display_name}</span>
+                //   {app.display_name !== app.app_name && (
+                //     <span className="text-xs text-fp-muted truncate">({app.app_name})</span>
+                //   )}
+                //   <button
+                //     onClick={() => onOpenEdit("name")}
+                //     className="text-fp-muted hover:text-fp-accent opacity-0 group-hover/name:opacity-100 transition-opacity text-xs ml-0.5"
+                //     title="Rename app"
+                //   >✎</button>
+                // </div>
                 <div className="flex items-center gap-1.5 group/name">
-                  <span className="text-sm font-medium text-fp-text truncate">{app.display_name}</span>
-                  {app.display_name !== app.app_name && (
-                    <span className="text-xs text-fp-muted truncate">({app.app_name})</span>
-                  )}
+                  <span className="text-sm font-medium text-fp-text truncate">
+                    {app.display_name || app.app_name}
+                  </span>
                   <button
                     onClick={() => onOpenEdit("name")}
                     className="text-fp-muted hover:text-fp-accent opacity-0 group-hover/name:opacity-100 transition-opacity text-xs ml-0.5"
                     title="Rename app"
-                  >✎</button>
+                  >
+                    ✎
+                  </button>
                 </div>
               )}
               <div
@@ -363,6 +368,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
             className="bg-fp-card border border-fp-border text-fp-text text-xs rounded-lg px-2 py-1"
           >
             <option value={0}>Off</option>
+            <option value={1}>1m</option>
             <option value={5}>5m</option>
             <option value={10}>10m</option>
             <option value={15}>15m</option>

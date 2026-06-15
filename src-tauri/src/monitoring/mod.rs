@@ -110,7 +110,7 @@ pub fn get_idle_seconds() -> u64 {
     0
 }
 
-// ─── WinTrack own exe name (lowercased) — always ignored ───────────────────
+// ─── WinTrack own exe name (lowercased) - always ignored ───────────────────
 const SELF_EXE: &str = "wintrack.exe";
 
 pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
@@ -126,7 +126,8 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
             let (poll_ms, idle_threshold_secs, is_paused) = {
                 match state.lock() {
                     Ok(s) => (
-                        s.db.get_polling_interval() as u64,
+                        // s.db.get_polling_interval() as u64,
+                        s.db.get_polling_interval().max(1000) as u64,
                         s.db.get_idle_threshold() * 60,
                         s.paused,
                     ),
@@ -154,10 +155,15 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
             }
 
             let idle_secs = get_idle_seconds();
-            let is_idle = idle_secs >= idle_threshold_secs as u64;
+
+            let is_idle = if idle_threshold_secs == 0 {
+                false
+            } else {
+                idle_secs >= idle_threshold_secs as u64
+            };
             let new_app = get_foreground_app();
 
-            // Skip WinTrack itself — never track our own process
+            // Skip WinTrack itself - never track our own process
             let new_app = new_app.filter(|a| a.app_name.to_lowercase() != SELF_EXE);
 
             // If new app is ignored in DB, treat as no foreground app
@@ -204,6 +210,142 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                 }
             }
 
+            if !is_idle {
+                if let (Some(app), Some(start)) = (&current_app, &session_start) {
+                    if let Ok(s) = state.lock() {
+                        if let Ok((app_id, is_ignored)) =
+                            s.db.upsert_app(&app.app_name, &app.executable_path)
+                        {
+                            if !is_ignored {
+                                let current_session_seconds = start.elapsed().as_secs() as i64;
+
+                                if let Ok(Some((today_usage, daily_limit))) =
+                                    s.db.get_app_limit_status(app_id)
+                                {
+                                    let total_usage = today_usage + current_session_seconds;
+
+                                    let limit_seconds = daily_limit * 60;
+                                    if total_usage >= limit_seconds {
+                                        let display_name =
+                                            s.db.get_app_display_name(app_id)
+                                                .unwrap_or_else(|_| app.app_name.clone());
+
+                                        let today =
+                                            chrono::Local::now().format("%Y-%m-%d").to_string();
+
+                                        if s.db
+                                            .should_send_limit_notification(app_id, &today)
+                                            .unwrap_or(false)
+                                        {
+                                            let _ = handle
+                                                .notification()
+                                                .builder()
+                                                .title("Daily Limit Reached")
+                                                .body(&format!(
+                                                    "{} has reached its daily limit.",
+                                                    display_name
+                                                ))
+                                                .show();
+
+                                            let _ =
+                                                s.db.mark_limit_notification_sent(app_id, &today);
+
+                                            let _ = s.db.mark_reminder_sent(app_id, total_usage);
+
+                                            println!(
+                                                "REAL-TIME LIMIT NOTIFICATION: {}",
+                                                display_name
+                                            );
+                                        }
+
+                                        let reminder_interval =
+                                            s.db.get_app_reminder_interval(app_id).unwrap_or(0);
+
+                                        if reminder_interval > 0
+                                            && s.db
+                                                .should_send_reminder(
+                                                    app_id,
+                                                    total_usage,
+                                                    reminder_interval,
+                                                )
+                                                .unwrap_or(false)
+                                        {
+                                            let _ = handle
+
+                                                    .notification()
+
+                                                    .builder()
+
+                                                    .title("Reminder")
+
+                                                    .body(&format!(
+
+                                                        "You're still using {} after exceeding its limit.",
+
+                                                            display_name
+
+                                                        ))
+
+                                                    .show();
+
+                                            let _ = s.db.mark_reminder_sent(app_id, total_usage);
+
+                                            println!("REAL-TIME REMINDER: {}", display_name);
+
+                                            if s.db.is_soft_lock_enabled(app_id).unwrap_or(false) {
+                                                let _ = s.db.increment_soft_lock_counter(app_id);
+
+                                                if let Ok(count) =
+                                                    s.db.get_soft_lock_counter(app_id)
+                                                {
+                                                    println!(
+                                                        "SOFT LOCK COUNT: {} -> {}",
+                                                        display_name, count
+                                                    );
+
+                                                    const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 1;
+
+                                                    if count >= SOFT_LOCK_TRIGGER_REMINDERS {
+                                                        println!(
+                                                            "SOFT LOCK TRIGGERED: {}",
+                                                            display_name
+                                                        );
+
+                                                        if handle
+                                                            .get_webview_window("soft-lock")
+                                                            .is_none()
+                                                        {
+                                                            let url = format!(
+                                                                "/?softlock=1&app={}&process={}",
+                                                                urlencoding::encode(&display_name),
+                                                                urlencoding::encode(&app.app_name)
+                                                            );
+
+                                                            let _ = WebviewWindowBuilder::new(
+                                                                &handle,
+                                                                "soft-lock",
+                                                                tauri::WebviewUrl::App(url.into()),
+                                                            )
+                                                            .inner_size(1280.0, 720.0)
+                                                            .resizable(true)
+                                                            .center()
+                                                            .build();
+                                                        }
+
+                                                        let _ =
+                                                            s.db.reset_soft_lock_counter(app_id);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             match state.lock() {
                 Ok(mut s) => {
                     s.current_app = current_app.as_ref().map(|a| a.app_name.clone());
@@ -226,7 +368,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
 
 fn flush_session(
     state: &Arc<Mutex<AppState>>,
-    handle: &AppHandle,
+    _handle: &AppHandle,
     current_app: &Option<ForegroundApp>,
     session_start: &Option<Instant>,
     session_start_str: &Option<String>,
@@ -245,9 +387,9 @@ fn flush_session(
         if let Ok(s) = state.lock() {
             match s.db.upsert_app(&app.app_name, &app.executable_path) {
                 Ok((app_id, is_ignored)) => {
-                    let display_name =
-                        s.db.get_app_display_name(app_id)
-                            .unwrap_or_else(|_| app.app_name.clone());
+                    // let display_name =
+                    //     s.db.get_app_display_name(app_id)
+                    //         .unwrap_or_else(|_| app.app_name.clone());
                     // Double-check ignored flag (could have changed at runtime)
                     if !is_ignored {
                         let _ = s.db.insert_session(
@@ -258,106 +400,106 @@ fn flush_session(
                             duration,
                             was_idle,
                         );
-                        if let Ok(Some((today_usage, daily_limit))) =
-                            s.db.get_app_limit_status(app_id)
-                        {
-                            let limit_seconds = daily_limit * 60;
+                        // if let Ok(Some((today_usage, daily_limit))) =
+                        //     s.db.get_app_limit_status(app_id)
+                        // {
+                        //     let limit_seconds = daily_limit * 60;
 
-                            if today_usage >= limit_seconds {
-                                let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                        //     if today_usage >= limit_seconds {
+                        //         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-                                // First limit notification
-                                if s.db
-                                    .should_send_limit_notification(app_id, &today)
-                                    .unwrap_or(false)
-                                {
-                                    let _ = handle
-                                        .notification()
-                                        .builder()
-                                        .title("Daily Limit Reached")
-                                        .body(&format!(
-                                            "{} has reached its daily limit.",
-                                            display_name
-                                        ))
-                                        .show();
+                        //         // First limit notification
+                        //         if s.db
+                        //             .should_send_limit_notification(app_id, &today)
+                        //             .unwrap_or(false)
+                        //         {
+                        //             let _ = handle
+                        //                 .notification()
+                        //                 .builder()
+                        //                 .title("Daily Limit Reached")
+                        //                 .body(&format!(
+                        //                     "{} has reached its daily limit.",
+                        //                     display_name
+                        //                 ))
+                        //                 .show();
 
-                                    let _ = s.db.mark_limit_notification_sent(app_id, &today);
+                        //             let _ = s.db.mark_limit_notification_sent(app_id, &today);
 
-                                    // Start reminder tracking from current usage
-                                    let _ = s.db.mark_reminder_sent(app_id, today_usage);
-                                }
-                                // Reminder notifications
-                                else if daily_limit > 0 {
-                                    let reminder_interval =
-                                        s.db.get_app_reminder_interval(app_id).unwrap_or(0);
+                        //             // Start reminder tracking from current usage
+                        //             let _ = s.db.mark_reminder_sent(app_id, today_usage);
+                        //         }
+                        //         Reminder notifications
+                        //         else if daily_limit > 0 {
+                        //             let reminder_interval =
+                        //                 s.db.get_app_reminder_interval(app_id).unwrap_or(0);
 
-                                    if reminder_interval > 0
-                                        && s.db
-                                            .should_send_reminder(
-                                                app_id,
-                                                today_usage,
-                                                reminder_interval,
-                                            )
-                                            .unwrap_or(false)
-                                    {
-                                        let _ = handle
-                                            .notification()
-                                            .builder()
-                                            .title("Reminder")
-                                            .body(&format!(
-                                                "You're still using {} after exceeding its limit.",
-                                                display_name
-                                            ))
-                                            .show();
+                        //             if reminder_interval > 0
+                        //                 && s.db
+                        //                     .should_send_reminder(
+                        //                         app_id,
+                        //                         today_usage,
+                        //                         reminder_interval,
+                        //                     )
+                        //                     .unwrap_or(false)
+                        //             {
+                        //                 let _ = handle
+                        //                     .notification()
+                        //                     .builder()
+                        //                     .title("Reminder")
+                        //                     .body(&format!(
+                        //                         "You're still using {} after exceeding its limit.",
+                        //                         display_name
+                        //                     ))
+                        //                     .show();
 
-                                        let _ = s.db.mark_reminder_sent(app_id, today_usage);
+                        //                 let _ = s.db.mark_reminder_sent(app_id, today_usage);
 
-                                        if s.db.is_soft_lock_enabled(app_id).unwrap_or(false) {
-                                            let _ = s.db.increment_soft_lock_counter(app_id);
+                        //                 if s.db.is_soft_lock_enabled(app_id).unwrap_or(false) {
+                        //                     let _ = s.db.increment_soft_lock_counter(app_id);
 
-                                            if let Ok(count) = s.db.get_soft_lock_counter(app_id) {
-                                                println!(
-                                                    "SOFT LOCK COUNT: {} -> {}",
-                                                    display_name, count
-                                                );
+                        //                     if let Ok(count) = s.db.get_soft_lock_counter(app_id) {
+                        //                         println!(
+                        //                             "SOFT LOCK COUNT: {} -> {}",
+                        //                             display_name, count
+                        //                         );
 
-                                                const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 1;
+                        //                         const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 1;
 
-                                                if count >= SOFT_LOCK_TRIGGER_REMINDERS {
-                                                    println!(
-                                                        "SOFT LOCK TRIGGERED: {}",
-                                                        display_name
-                                                    );
+                        //                         if count >= SOFT_LOCK_TRIGGER_REMINDERS {
+                        //                             println!(
+                        //                                 "SOFT LOCK TRIGGERED: {}",
+                        //                                 display_name
+                        //                             );
 
-                                                    if handle
-                                                        .get_webview_window("soft-lock")
-                                                        .is_none()
-                                                    {
-                                                        let url = format!(
-                                                            "/?softlock=1&app={}&process={}",
-                                                            urlencoding::encode(&display_name),
-                                                            urlencoding::encode(&app.app_name)
-                                                        );
+                        //                             if handle
+                        //                                 .get_webview_window("soft-lock")
+                        //                                 .is_none()
+                        //                             {
+                        //                                 let url = format!(
+                        //                                     "/?softlock=1&app={}&process={}",
+                        //                                     urlencoding::encode(&display_name),
+                        //                                     urlencoding::encode(&app.app_name)
+                        //                                 );
 
-                                                        let _ = WebviewWindowBuilder::new(
-                                                            handle,
-                                                            "soft-lock",
-                                                            tauri::WebviewUrl::App(url.into()),
-                                                        )
-                                                        .inner_size(500.0, 300.0)
-                                                        .resizable(true)
-                                                        .center()
-                                                        .build();
-                                                    }
+                        //                                 let _ = WebviewWindowBuilder::new(
+                        //                                     handle,
+                        //                                     "soft-lock",
+                        //                                     tauri::WebviewUrl::App(url.into()),
+                        //                                 )
+                        //                                 .inner_size(500.0, 300.0)
+                        //                                 .resizable(true)
+                        //                                 .center()
+                        //                                 .build();
+                        //                             }
 
-                                                    let _ = s.db.reset_soft_lock_counter(app_id);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        //                             let _ = s.db.reset_soft_lock_counter(app_id);
+                        //                         }
+                        //                     }
+                        //                 }
+                        //             // }
+                        //         }
+                        //     }
+                        // }
                         log::debug!(
                             "Flushed: {} ({}s idle={})",
                             app.app_name,

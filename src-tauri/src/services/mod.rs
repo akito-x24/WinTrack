@@ -39,6 +39,7 @@ pub fn resolve_db_path() -> String {
                 polling_interval_ms INTEGER NOT NULL DEFAULT 1000,
                 idle_threshold_minutes INTEGER NOT NULL DEFAULT 5,
                 launch_on_startup INTEGER NOT NULL DEFAULT 1,
+                start_minimized INTEGER NOT NULL DEFAULT 1,
                 theme TEXT NOT NULL DEFAULT 'dark',
                 database_path TEXT NOT NULL DEFAULT '',
                 notification_enabled INTEGER NOT NULL DEFAULT 1,

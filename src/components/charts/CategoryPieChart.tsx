@@ -1,136 +1,3 @@
-// import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
-// import { CATEGORY_COLORS } from "../../types";
-// import { formatDuration } from "../../utils/helpers";
-// import type {
-//   CategoryUsage,
-//   AppUsage,
-// } from "../../types";
-
-// interface Props {
-//   categories: CategoryUsage[];
-//   apps: AppUsage[];
-// }
-
-// export default function CategoryPieChart({
-//   categories,
-//   apps,
-// }: Props) {
-//   if (!categories || categories.length === 0) {
-//     return (
-//       <div className="flex items-center justify-center h-48 text-fp-muted text-sm">
-//         No data
-//       </div>
-//     );
-//   }
-
-//   const APP_COLORS = [
-//       "#3b82f6",
-//       "#60a5fa",
-//       "#2563eb",
-  
-//       "#22c55e",
-//       "#4ade80",
-//       "#16a34a",
-  
-//       "#f59e0b",
-//       "#fbbf24",
-//       "#d97706",
-  
-//       "#ef4444",
-//       "#f87171",
-//       "#dc2626",
-  
-//       "#8b5cf6",
-//       "#a78bfa",
-//       "#7c3aed",
-  
-//       "#06b6d4",
-//       "#22d3ee",
-//       "#0891b2",
-//     ];
-    
-//   const categoryData = categories.map(d => ({
-//     name: d.category,
-//     value: d.duration_seconds,
-//     color:
-//       CATEGORY_COLORS[
-//       d.category as keyof typeof CATEGORY_COLORS
-//       ] || "#64748b",
-//   }));
-
-//   const appData = apps.map(app => ({
-//     name: app.app_name,
-//     value: app.duration_seconds,
-//     color:
-//       CATEGORY_COLORS[
-//       app.category as keyof typeof CATEGORY_COLORS
-//       ] || "#64748b",
-//   }));
-
-//   // const appData = apps.map((app, index) => ({
-//   //   name: app.app_name,
-//   //   value: app.duration_seconds,
-//   //   category: app.category,
-//   //   color: APP_COLORS[index % APP_COLORS.length],
-//   // }));
-
-//   const CustomTooltip = ({ active, payload }: any) => {
-//     if (!active || !payload?.length) return null;
-//     return (
-//       <div className="bg-fp-card border border-fp-border rounded-lg px-3 py-2">
-//         <p className="text-xs font-medium text-fp-text">{payload[0].name}</p>
-//         <p className="text-xs text-fp-muted">{formatDuration(payload[0].value)}</p>
-//       </div>
-//     );
-//   };
-
-//   const renderLegend = (props: any) => {
-//     const { payload } = props;
-//     return (
-//       <ul className="flex flex-wrap gap-2 justify-center mt-3">
-//         {payload.map((entry: any, i: number) => (
-//           <li key={i} className="flex items-center gap-1.5">
-//             <span className="w-2 h-2 rounded-full" style={{ background: entry.color }} />
-//             <span className="text-[11px] text-fp-muted">{entry.value}</span>
-//           </li>
-//         ))}
-//       </ul>
-//     );
-//   };
-
-//   return (
-//     <ResponsiveContainer width="100%" height={320}>
-//       <PieChart>
-//         <Pie
-//           data={categoryData}
-//           innerRadius={30}
-//           outerRadius={70}
-//           dataKey="value"
-//           strokeWidth={1}
-//         >
-//           {categoryData.map((entry, i) => (
-//             <Cell key={i} fill={entry.color} />
-//           ))}
-//         </Pie>
-
-//         <Pie
-//           data={appData}
-//           innerRadius={70}
-//           outerRadius={110}
-//           dataKey="value"
-//           strokeWidth={1}
-//         >
-//           {appData.map((entry, i) => (
-//             <Cell key={i} fill={entry.color} />
-//           ))}
-//         </Pie>
-//         <Tooltip content={<CustomTooltip />} />
-//         <Legend content={renderLegend} />
-//       </PieChart>
-//     </ResponsiveContainer>
-//   );
-// }
-
 import {
   PieChart,
   Pie,
@@ -152,14 +19,65 @@ interface Props {
   apps: AppUsage[];
 }
 
+// const CATEGORY_SHADES: Record<string, string[]> = {
+//   Development: ["#2563eb", "#3b82f6", "#60a5fa", "#93c5fd"],
+//   Study: ["#c026d3", "#d946ef", "#e879f9", "#f0abfc"],
+//   Productive: ["#16a34a", "#22c55e", "#4ade80", "#86efac"],
+//   Entertainment: ["#d97706", "#f59e0b", "#fbbf24", "#fde68a"],
+//   Social: ["#7c3aed", "#8b5cf6", "#a78bfa", "#c4b5fd"],
+//   Gaming: ["#dc2626", "#ef4444", "#f87171", "#fca5a5"],
+//   Other: ["#475569", "#64748b", "#94a3b8", "#cbd5e1"],
+// };
+
 const CATEGORY_SHADES: Record<string, string[]> = {
-  Development: ["#2563eb", "#3b82f6", "#60a5fa", "#93c5fd"],
-  Study: ["#c026d3", "#d946ef", "#e879f9", "#f0abfc"],
-  Productive: ["#16a34a", "#22c55e", "#4ade80", "#86efac"],
-  Entertainment: ["#d97706", "#f59e0b", "#fbbf24", "#fde68a"],
-  Social: ["#7c3aed", "#8b5cf6", "#a78bfa", "#c4b5fd"],
-  Gaming: ["#dc2626", "#ef4444", "#f87171", "#fca5a5"],
-  Other: ["#475569", "#64748b", "#94a3b8", "#cbd5e1"],
+  Development: [
+    "#3385FF",
+    "#66A3FF",
+    "#99C2FF",
+    "#CCE0FF",
+  ],
+
+  Productive: [
+    "#4DEEFF",
+    "#80F3FF",
+    "#B3F8FF",
+    "#D9FCFF",
+  ],
+
+  Study: [
+    "#A78BFA",
+    "#C4B5FD",
+    "#DDD6FE",
+    "#EDE9FE",
+  ],
+
+  Social: [
+    "#FF66BF",
+    "#FF99D6",
+    "#FFC2E8",
+    "#FFE0F3",
+  ],
+
+  Entertainment: [
+    "#FFC233",
+    "#FFD466",
+    "#FFE699",
+    "#FFF2CC",
+  ],
+
+  Gaming: [
+    "#FF7333",
+    "#FF9966",
+    "#FFBF99",
+    "#FFE0CC",
+  ],
+
+  Other: [
+    "#B1BDCC",
+    "#CBD5E1",
+    "#E2E8F0",
+    "#F1F5F9",
+  ],
 };
 
 export default function CategoryPieChart({

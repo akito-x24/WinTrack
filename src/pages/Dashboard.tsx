@@ -13,7 +13,7 @@ import { formatDuration, todayString } from "../utils/helpers";
 import type { MonthlyStats } from "../types";
 
 export default function Dashboard() {
-  const { todayStats, weeklyStats, loading } = useStore();
+  const { todayStats, weeklyStats, average30Days, loading } = useStore();
 
   if (loading.today && !todayStats) return <LoadingSpinner />;
 
@@ -33,7 +33,7 @@ export default function Dashboard() {
 
         <StatCard
           label="Daily Average"
-          value="Coming Soon"
+          value={formatDuration(average30Days)}
           sub="30-day average"
           accent="#22c55e"
         />

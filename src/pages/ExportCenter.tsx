@@ -14,7 +14,7 @@ export default function ExportCenter() {
     setStatus("picking");
     const path = await api.pickSavePath(format);
     if (path) {
-      // Strip extension — we append it ourselves so format switch stays consistent
+      // Strip extension - we append it ourselves so format switch stays consistent
       setOutputPath(path.replace(/\.(csv|json)$/i, ""));
     }
     setStatus("idle");
@@ -154,10 +154,10 @@ export default function ExportCenter() {
       <div className="fp-card bg-fp-accent/5 border-fp-accent/20">
         <h3 className="text-xs font-semibold text-fp-accent mb-2">Export Info</h3>
         <ul className="text-xs text-fp-muted space-y-1">
-          <li>• Click <strong className="text-fp-text">Export Data</strong> — a save dialog will open if no location is set</li>
+          <li>• Click <strong className="text-fp-text">Export Data</strong> - a save dialog will open if no location is set</li>
           <li>• CSV exports are compatible with Excel, Google Sheets, etc.</li>
           <li>• JSON exports include all session metadata</li>
-          <li>• All data stays local — nothing is uploaded anywhere</li>
+          <li>• All data stays local - nothing is uploaded anywhere</li>
         </ul>
       </div>
     </div>

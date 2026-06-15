@@ -18,9 +18,18 @@ function applyTheme(theme: string) {
 }
 
 export default function SettingsPage() {
-  const { settings, fetchSettings, updateSettings } = useStore();
+  const {
+    settings,
+    fetchSettings,
+    updateSettings,
+    refreshAll,
+    fetchAppList,
+  } = useStore();
   const [local, setLocal] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
+  const [pendingReset, setPendingReset] = useState<
+    "none" | "reset" | "factory"
+  >("none");
   const [dbStatus, setDbStatus] = useState<{ msg: string; ok: boolean } | null>(null);
   const [dbMoving, setDbMoving] = useState(false);
 
@@ -38,57 +47,81 @@ export default function SettingsPage() {
 
   const save = async () => {
     if (!local) return;
+
+    await api.setAutostart(local.launch_on_startup);
+
     await updateSettings(local);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
 
-  const handleBrowseDb = async () => {
-    const folder = await api.pickFolder();
-    if (!folder || !local) return;
-    const cleanFolder = folder.replace(/\//g, "\\").replace(/\\+$/, "");
-    const newPath = `${cleanFolder}\\WinTrack.db`;
-    await handleMoveDb(newPath);
-  };
+    if (pendingReset === "reset") {
+      await api.resetTrackingData();
 
-  const handleMoveDb = async (newPath: string) => {
-    setDbMoving(true);
-    setDbStatus(null);
-    try {
-      const result = await api.moveDatabase(newPath);
-      set("database_path", result);
-      await fetchSettings();
-      setDbStatus({ msg: `✓ Database moved to ${result}`, ok: true });
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      if (msg.includes("same file") || msg.includes("Cannot copy") || msg.includes("already")) {
-        setDbStatus({ msg: "Database is already at that location.", ok: true });
-      } else {
-        setDbStatus({ msg: `Failed: ${msg}`, ok: false });
-      }
-    } finally {
-      setDbMoving(false);
+      await Promise.all([
+        refreshAll(),
+        fetchAppList(),
+        fetchSettings(),
+      ]);
+
+      setPendingReset("none");
+    }
+
+    if (pendingReset === "factory") {
+      await api.factoryReset();
+
+      await Promise.all([
+        refreshAll(),
+        fetchAppList(),
+        fetchSettings(),
+      ]);
+
+      setPendingReset("none");
+
+      window.location.reload();
+    }
+
+    if (local.notification_enabled) {
+      await api.sendNotification(
+        "WinTrack",
+        "Settings saved successfully"
+      );
     }
   };
 
-  const handleResetDb = async () => {
-    setDbMoving(true);
-    setDbStatus(null);
-    try {
-      const result = await api.resetDatabasePath();
-      set("database_path", result);
-      await fetchSettings();
-      setDbStatus({ msg: `✓ Reset to default: ${result}`, ok: true });
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      if (msg.includes("same file") || msg.includes("Cannot copy") || msg.includes("already")) {
-        setDbStatus({ msg: "Database is already at the default location.", ok: true });
-      } else {
-        setDbStatus({ msg: `Failed: ${msg}`, ok: false });
-      }
-    } finally {
-      setDbMoving(false);
-    }
+  // const resetTrackingData = async () => {
+  //   if (!confirm("Delete all tracking history?")) return;
+
+  //   await api.resetTrackingData();
+
+  //   await Promise.all([
+  //     refreshAll(),
+  //     fetchAppList(),
+  //     fetchSettings(),
+  //   ]);
+  // };
+
+  // const factoryReset = async () => {
+  //   if (!confirm("Delete all tracking history and settings?")) return;
+
+  //   await api.factoryReset();
+
+  //   await Promise.all([
+  //     refreshAll(),
+  //     fetchAppList(),
+  //     fetchSettings(),
+  //   ]);
+
+  //   window.location.reload();
+  // };
+
+  const resetTrackingData = () => {
+    setPendingReset(prev =>
+      prev === "reset" ? "none" : "reset"
+    );
+  };
+
+  const factoryReset = () => {
+    setPendingReset(prev =>
+      prev === "factory" ? "none" : "factory"
+    );
   };
 
   if (!local) return <LoadingSpinner />;
@@ -100,22 +133,41 @@ export default function SettingsPage() {
       <SettingsSection title="Tracking">
         <SettingsRow label="Polling Interval" description="How often to check the active window">
           <div className="flex items-center gap-2">
-            <input type="range" min={250} max={10000} step={250}
+            <select
               value={local.polling_interval_ms}
-              onChange={e => set("polling_interval_ms", Number(e.target.value))}
-              className="w-32 accent-fp-accent"
-            />
-            <span className="text-xs text-fp-text w-16">{local.polling_interval_ms}ms</span>
+              onChange={(e) =>
+                set("polling_interval_ms", Number(e.target.value))
+              }
+              className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5"
+            >
+              <option value={1000}>1 second</option>
+              <option value={2000}>2 seconds</option>
+              <option value={3000}>3 seconds</option>
+              <option value={5000}>5 seconds</option>
+              <option value={10000}>10 seconds</option>
+            </select>
           </div>
         </SettingsRow>
         <SettingsRow label="Idle Threshold" description="Minutes of inactivity before marking as idle">
           <div className="flex items-center gap-2">
-            <input type="number" min={1} max={60}
+            <select
               value={local.idle_threshold_minutes}
-              onChange={e => set("idle_threshold_minutes", Number(e.target.value))}
-              className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5 w-20 focus:outline-none focus:border-fp-accent"
-            />
-            <span className="text-xs text-fp-muted">minutes</span>
+              onChange={(e) =>
+                set(
+                  "idle_threshold_minutes",
+                  Number(e.target.value)
+                )
+              }
+              className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5"
+            >
+              <option value={0}>Never</option>
+              <option value={5}>5 minutes</option>
+              <option value={10}>10 minutes</option>
+              <option value={15}>15 minutes</option>
+              <option value={20}>20 minutes</option>
+              <option value={25}>25 minutes</option>
+              <option value={30}>30 minutes</option>
+            </select>
           </div>
         </SettingsRow>
       </SettingsSection>
@@ -125,78 +177,75 @@ export default function SettingsPage() {
         <SettingsRow label="Launch on Startup" description="Start WinTrack automatically when Windows starts">
           <Toggle
             checked={local.launch_on_startup}
-            onChange={async (v) => {
-              set("launch_on_startup", v);
-              await api.setAutostart(v);
-            }}
+            onChange={(v) => set("launch_on_startup", v)}
+          />
+        </SettingsRow>
+        <SettingsRow
+          label="Start Minimized"
+          description="Launch directly to the system tray"
+        >
+          <Toggle
+            checked={local.start_minimized}
+            onChange={(v) => set("start_minimized", v)}
           />
         </SettingsRow>
         <SettingsRow label="Notifications" description="Show system notifications for daily summaries">
           <Toggle
             checked={local.notification_enabled}
-            onChange={async (v) => {
-              set("notification_enabled", v);
-              // Send a test notification when enabling so user confirms it works
-              if (v) await api.sendNotification("WinTrack", "Notifications enabled ✓");
-            }}
+            onChange={(v) => set("notification_enabled", v)}
           />
         </SettingsRow>
       </SettingsSection>
 
-      {/* Appearance
-      <SettingsSection title="Appearance">
-        <SettingsRow label="Theme" description="Changes appearance immediately">
-          <select
-            value={local.theme}
-            onChange={e => set("theme", e.target.value as Settings["theme"])}
-            className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-fp-accent"
+      <SettingsSection title="Danger Zone">
+        <SettingsRow
+          label="Reset All Data"
+          description="Delete all tracking history while keeping settings"
+        >
+          <button
+            onClick={resetTrackingData}
+            className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${pendingReset === "reset"
+                ? "border-yellow-500 text-yellow-400 bg-yellow-500/10"
+                : "border-fp-border hover:bg-fp-border"
+              }`}
           >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="system">System Default</option>
-          </select>
+            {pendingReset === "reset"
+              ? "✓ Reset Queued"
+              : "Reset Data"}
+          </button>
         </SettingsRow>
-      </SettingsSection> */}
 
-      {/* Storage */}
-      <SettingsSection title="Storage & Database">
-        <div className="px-5 py-4 space-y-3">
-          <div>
-            <div className="text-sm font-medium text-fp-text mb-0.5">Database Location</div>
-            <div className="text-xs text-fp-muted mb-2">
-              Your tracking data is stored here. Moving it copies all existing data.
-            </div>
-            <code className="block bg-fp-bg border border-fp-border rounded-lg p-2 text-xs text-fp-muted break-all font-mono">
-              {local.database_path || "Loading..."}
-            </code>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleBrowseDb}
-              disabled={dbMoving}
-              className="fp-btn-primary text-xs disabled:opacity-50"
-            >
-              {dbMoving
-                ? <span className="flex items-center gap-1.5"><span className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin inline-block" />Moving...</span>
-                : "🗀 Browse & Move"}
-            </button>
-            <button onClick={handleResetDb} disabled={dbMoving} className="fp-btn-ghost text-xs disabled:opacity-50">
-              ↺ Reset to Default
-            </button>
-          </div>
-          {dbStatus && (
-            <div className={`text-xs px-3 py-2 rounded-lg border ${
-              dbStatus.ok ? "bg-fp-green/10 text-fp-green border-fp-green/30"
-                         : "bg-fp-red/10 text-fp-red border-fp-red/30"
-            }`}>
-              {dbStatus.msg}
-            </div>
-          )}
-          <p className="text-[11px] text-fp-amber">
-            ⚠ After moving the database, restart WinTrack to ensure tracking uses the new location.
-          </p>
-        </div>
+        <SettingsRow
+          label="Factory Reset"
+          description="Delete all tracking history and settings"
+        >
+          <button
+            onClick={factoryReset}
+            className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${pendingReset === "factory"
+                ? "border-red-500 text-red-400 bg-red-500/10"
+                : "border-red-500 text-red-400 hover:bg-red-500/10"
+              }`}
+          >
+            {pendingReset === "factory"
+              ? "✓ Factory Reset Queued"
+              : "Factory Reset"}
+          </button>
+        </SettingsRow>
       </SettingsSection>
+
+            {pendingReset !== "none" && (
+        <div className="fp-card border border-red-500/30 bg-red-500/10 p-4">
+          <div className="text-red-400 font-medium">
+            ⚠ Pending Action
+          </div>
+
+          <div className="text-sm text-fp-muted mt-1">
+            {pendingReset === "reset"
+              ? "All tracking history will be deleted when you click Save Settings."
+              : "All tracking history and settings will be deleted when you click Save Settings."}
+          </div>
+        </div>
+      )}
 
       {/* Save */}
       <div className="flex justify-end pt-4 border-t border-fp-border">
@@ -235,13 +284,11 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <button
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${
-        checked ? "bg-fp-accent" : "bg-fp-border"
-      }`}
+      className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${checked ? "bg-fp-accent" : "bg-fp-border"
+        }`}
     >
-      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
-        checked ? "translate-x-5" : "translate-x-0.5"
-      }`} />
+      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-5" : "translate-x-0.5"
+        }`} />
     </button>
   );
 }

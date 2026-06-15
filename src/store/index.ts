@@ -11,6 +11,7 @@ interface AppStore {
 
   todayStats: DailyStats | null;
   weeklyStats: WeeklyStats | null;
+  average30Days: number;
   appList: App[] | null;
   settings: Settings | null;
   currentSession: CurrentSession | null;
@@ -21,6 +22,7 @@ interface AppStore {
 
   fetchTodayStats: () => Promise<void>;
   fetchWeeklyStats: () => Promise<void>;
+  fetch30DayAverage: () => Promise<void>;
   fetchAppList: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   fetchCurrentSession: () => Promise<void>;
@@ -43,6 +45,7 @@ export const useStore = create<AppStore>((set, get) => ({
 
   todayStats: null,
   weeklyStats: null,
+  average30Days: 0,
   appList: null,
   settings: null,
   currentSession: null,
@@ -50,6 +53,14 @@ export const useStore = create<AppStore>((set, get) => ({
 
   loading: {},
   errors: {},
+
+  fetch30DayAverage: async () => {
+    try {
+      set({ average30Days: await api.get30DayAverage() });
+    } catch (e) {
+      console.error(e);
+    }
+  },
 
   fetchTodayStats: async () => {
     set(s => ({ loading: { ...s.loading, today: true } }));
@@ -166,6 +177,7 @@ export const useStore = create<AppStore>((set, get) => ({
       g.fetchTodayStats(),
       g.fetchWeeklyStats(),
       g.fetchCurrentSession(),
+      g.fetch30DayAverage(),
     ]);
   },
 }));

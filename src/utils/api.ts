@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import {open as dialogOpen, save as dialogSave} from "@tauri-apps/plugin-dialog";
+import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
 import { enable as enableAutostart, disable as disableAutostart } from "@tauri-apps/plugin-autostart";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import type {
@@ -16,37 +16,36 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 }
 
 export const api = {
-  getTodayStats:    () => call<DailyStats>("get_today_stats"),
-  getDailyUsage:    (date: string) => call<DailyStats>("get_daily_usage", { date }),
-  // Tauri v2 expects camelCase for snake_case Rust arguments
-  getWeeklyUsage:   (start_date: string) => call<WeeklyStats>("get_weekly_usage", { startDate: start_date }), 
-  getMonthlyUsage:  (year: number, month: number) => call<MonthlyStats>("get_monthly_usage", { year, month }),
-  getAppList:       () => call<App[]>("get_app_list"),
+  getTodayStats: () => call<DailyStats>("get_today_stats"),
+  getDailyUsage: (date: string) => call<DailyStats>("get_daily_usage", { date }),
+  getWeeklyUsage: (start_date: string) => call<WeeklyStats>("get_weekly_usage", { startDate: start_date }),
+  getMonthlyUsage: (year: number, month: number) => call<MonthlyStats>("get_monthly_usage", { year, month }),
+  getAppList: () => call<App[]>("get_app_list"),
   getHourlyHeatmap: (date: string) => call<HourlyHeatmap>("get_hourly_heatmap", { date }),
-  getSettings:      () => call<Settings>("get_settings"),
-  getTimeline:      (date: string) => call<Timeline>("get_timeline", { date }),
-  getCurrentSession:() => call<CurrentSession>("get_current_session"),
+  getSettings: () => call<Settings>("get_settings"),
+  getTimeline: (date: string) => call<Timeline>("get_timeline", { date }),
+  getCurrentSession: () => call<CurrentSession>("get_current_session"),
 
-  updateAppCategory:    (app_id: number, category: string) => call<boolean>("update_app_category", { appId: app_id, category }),
+  updateAppCategory: (app_id: number, category: string) => call<boolean>("update_app_category", { appId: app_id, category }),
   updateAppDisplayName: (app_id: number, display_name: string) => call<boolean>("update_app_display_name", { appId: app_id, displayName: display_name }),
-  setAppIgnored:        (app_id: number, ignored: boolean) => call<boolean>("set_app_ignored", { appId: app_id, ignored }),
-  updateAppReminderInterval: (app_id: number, interval_minutes: number) => call<boolean>("update_app_reminder_interval", {appId: app_id, intervalMinutes: interval_minutes}),
-  updateAppSoftLockEnabled: (app_id: number, enabled: boolean) => call<boolean>("set_app_soft_lock_enabled", {appId: app_id, enabled}),
-  updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", {appId: app_id, limitMinutes: limit_minutes}),
+  setAppIgnored: (app_id: number, ignored: boolean) => call<boolean>("set_app_ignored", { appId: app_id, ignored }),
+  updateAppReminderInterval: (app_id: number, interval_minutes: number) => call<boolean>("update_app_reminder_interval", { appId: app_id, intervalMinutes: interval_minutes }),
+  updateAppSoftLockEnabled: (app_id: number, enabled: boolean) => call<boolean>("set_app_soft_lock_enabled", { appId: app_id, enabled }),
+  updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", { appId: app_id, limitMinutes: limit_minutes }),
 
   closeProcess: (process_name: string) => call<void>("close_process", { processName: process_name }),
 
-  updateSettings:  (settings: Partial<Settings>) => call<boolean>("update_settings", { settings }),
-  pauseTracking:   () => call<boolean>("pause_tracking"),
-  resumeTracking:  () => call<boolean>("resume_tracking"),
-  isTrackingPaused:() => call<boolean>("is_tracking_paused"),
+  resetTrackingData: () => call<void>("reset_tracking_data"),
+  factoryReset: () => call<void>("factory_reset"),
 
-  exportData:  (format: string, start_date: string, end_date: string, output_path: string) =>
-    call<string>("export_data", { format, startDate: start_date, endDate: end_date, outputPath: output_path }),
+  updateSettings: (settings: Partial<Settings>) => call<boolean>("update_settings", { settings }),
+  pauseTracking: () => call<boolean>("pause_tracking"),
+  resumeTracking: () => call<boolean>("resume_tracking"),
+  isTrackingPaused: () => call<boolean>("is_tracking_paused"),
 
-  backupDatabase:    (backup_path: string) => call<boolean>("backup_database", { backupPath: backup_path }),
-  moveDatabase:      (new_path: string) => call<string>("move_database", { newPath: new_path }),
-  resetDatabasePath: () => call<string>("reset_database_path"),
+  exportData: (format: string, start_date: string, end_date: string, output_path: string) => call<string>("export_data", { format, startDate: start_date, endDate: end_date, outputPath: output_path }),
+
+  async get30DayAverage(): Promise<number> { return invoke<number>("get_30_day_average"); },
 
   // ─── Autostart ────────────────────────────────────────────────────────────
   setAutostart: async (enabled: boolean): Promise<void> => {
@@ -85,7 +84,7 @@ export const api = {
       return null;
     }
   },
-  
+
   // ─── File save picker (for export) ────────────────────────────────────────
   pickSavePath: async (format: "csv" | "json"): Promise<string | null> => {
     if (!isTauri()) return `C:\\Users\\User\\Downloads\\wintrack-export.${format}`;
@@ -109,14 +108,14 @@ export const api = {
 // ─── Mock data for browser dev ───────────────────────────────────────────────
 
 const _initialMockApps: AppUsage[] = [
-  { app_name: "VS Code",        executable_path: "C:\\VSCode\\Code.exe",    category: "Development",   duration_seconds: 7200, sessions: 3 },
-  { app_name: "Google Chrome",  executable_path: "C:\\Chrome\\chrome.exe",  category: "Productive",    duration_seconds: 5400, sessions: 12 },
-  { app_name: "Spotify",         executable_path: "C:\\Spotify\\spotify.exe",category: "Entertainment", duration_seconds: 3600, sessions: 2 },
-  { app_name: "Discord",        executable_path: "C:\\Discord\\discord.exe",category: "Social",        duration_seconds: 1800, sessions: 5 },
-  { app_name: "Steam",          executable_path: "C:\\Steam\\steam.exe",    category: "Gaming",        duration_seconds: 900,  sessions: 1 },
-  { app_name: "Notion",         executable_path: "C:\\Notion\\notion.exe",  category: "Productive",    duration_seconds: 2700, sessions: 4 },
-  { app_name: "Slack",          executable_path: "C:\\Slack\\slack.exe",    category: "Productive",    duration_seconds: 1200, sessions: 8 },
-  { app_name: "Terminal",       executable_path: "C:\\Windows\\cmd.exe",    category: "Development",   duration_seconds: 2400, sessions: 6 },
+  { app_name: "VS Code", executable_path: "C:\\VSCode\\Code.exe", category: "Development", duration_seconds: 7200, sessions: 3 },
+  { app_name: "Google Chrome", executable_path: "C:\\Chrome\\chrome.exe", category: "Productive", duration_seconds: 5400, sessions: 12 },
+  { app_name: "Spotify", executable_path: "C:\\Spotify\\spotify.exe", category: "Entertainment", duration_seconds: 3600, sessions: 2 },
+  { app_name: "Discord", executable_path: "C:\\Discord\\discord.exe", category: "Social", duration_seconds: 1800, sessions: 5 },
+  { app_name: "Steam", executable_path: "C:\\Steam\\steam.exe", category: "Gaming", duration_seconds: 900, sessions: 1 },
+  { app_name: "Notion", executable_path: "C:\\Notion\\notion.exe", category: "Productive", duration_seconds: 2700, sessions: 4 },
+  { app_name: "Slack", executable_path: "C:\\Slack\\slack.exe", category: "Productive", duration_seconds: 1200, sessions: 8 },
+  { app_name: "Terminal", executable_path: "C:\\Windows\\cmd.exe", category: "Development", duration_seconds: 2400, sessions: 6 },
 ];
 
 let _mockAppList: (App & { total_seconds: number })[] = _initialMockApps.map((a, i) => ({
@@ -146,11 +145,11 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
   //   .reduce((s, a) => s + a.duration_seconds, 0);
 
   const categories: CategoryUsage[] = [
-    { category: "Development",   duration_seconds: 9600 },
-    { category: "Productive",    duration_seconds: 9300 },
+    { category: "Development", duration_seconds: 9600 },
+    { category: "Productive", duration_seconds: 9300 },
     { category: "Entertainment", duration_seconds: 3600 },
-    { category: "Social",         duration_seconds: 1800 },
-    { category: "Gaming",        duration_seconds: 900 },
+    { category: "Social", duration_seconds: 1800 },
+    { category: "Gaming", duration_seconds: 900 },
   ];
 
   const todayStats: DailyStats = {
@@ -192,7 +191,7 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
         id: a.id,
         app_name: a.app_name,
         display_name: a.display_name,
-         executable_path: a.executable_path,
+        executable_path: a.executable_path,
         category: a.category as any,
         total_seconds: a.total_seconds,
         is_ignored: a.is_ignored,
@@ -212,16 +211,14 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
         app_name: app.app_name, category: app.category,
         window_title: `${app.app_name} - Window ${i + 1}`,
         start_time: `${today}T${String(8 + i).padStart(2, "0")}:00:00`,
-        end_time:   `${today}T${String(9 + i).padStart(2, "0")}:00:00`,
+        end_time: `${today}T${String(9 + i).padStart(2, "0")}:00:00`,
         duration_seconds: 3600, was_idle: false,
       }));
       return { date: args?.date, sessions };
     }
 
-    case "is_tracking_paused":    return false;
-    case "get_current_session":   return { current_app: "VS Code", session_start: new Date().toISOString(), is_idle: false };
-    case "move_database":         return args?.newPath ?? "";
-    case "reset_database_path":   return "C:\\ProgramData\\WinTrack\\Database\\wintrack.db";
+    case "is_tracking_paused": return false;
+    case "get_current_session": return { current_app: "VS Code", session_start: new Date().toISOString(), is_idle: false };
 
     case "set_app_ignored": {
       const app_id = Number(args?.appId ?? -1);
@@ -230,7 +227,7 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
       if (idx >= 0) { _mockAppList[idx].is_ignored = ignored; }
       return null;
     }
-    
+
     case "update_app_category": {
       const app_id = Number(args?.appId ?? -1);
       const category = String(args?.category ?? "Other");
@@ -238,7 +235,7 @@ function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
       if (idx >= 0) { _mockAppList[idx].category = category as any; }
       return null;
     }
-    
+
     case "update_app_display_name": {
       const app_id = Number(args?.appId ?? -1);
       const display_name = String(args?.displayName ?? "");

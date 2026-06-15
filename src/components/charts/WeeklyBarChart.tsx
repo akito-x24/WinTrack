@@ -6,7 +6,8 @@ interface Props {
 }
  
 export default function WeeklyBarChart({ data }: Props) {
-  const today = new Date().toISOString().split("T")[0];
+  // const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toLocaleDateString("en-CA");
   const max = Math.max(...data.map(d => d.active_seconds), 1);
 
   const getActiveColor = (date: string) => date === today ? "#60a5fa" : "#3b82f6";
@@ -17,7 +18,7 @@ export default function WeeklyBarChart({ data }: Props) {
   return (
     <div className="w-full">
       {/* Bars */}
-      <div className="flex gap-12 h-36 items-end mb-1">
+      <div className="flex gap-2 h-36 items-end mb-1">
         {data.map((d) => {
           const activePct  = Math.max(0, (d.active_seconds / max) * 100);
           const isToday    = d.date === today;
@@ -29,22 +30,22 @@ export default function WeeklyBarChart({ data }: Props) {
                 className="flex-1 rounded-t transition-all duration-300"
                 style={{
                   height: `${activePct}%`,
-                  // backgroundColor: isToday ? "#3b82f6" : "#3b82f6",
-                  backgroundColor: getActiveColor(d.date)
+                  backgroundColor: isToday ? "#092ee7" : "#3581fb",
+                  // backgroundColor: getActiveColor(d.date)
                 }}
               />
 
               {/* Tooltip */}
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-fp-card border border-fp-border rounded-lg px-3 py-2 text-xs text-fp-text opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none shadow-lg">
                 <p className="font-medium mb-1">{dayLabel(d.date)}{isToday ? " · Today" : ""}</p>
-                <p style={{ color: "#1b6cde" }}>Total: {formatDuration(d.active_seconds)}</p>
+                <p style={{ color: "#0f5cc8" }}>Total: {formatDuration(d.active_seconds)}</p>
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* Day labels — perfectly aligned with bars */}
+      {/* Day labels - perfectly aligned with bars */}
       <div className="flex gap-1">
         {data.map((d) => (
           <div key={d.date} className="flex-1 text-center">
@@ -54,22 +55,6 @@ export default function WeeklyBarChart({ data }: Props) {
           </div>
         ))}
       </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-[#1b6cde]" />
-          <span className="text-[11px] text-fp-muted">Total Active Time</span>
-      </div>
-      {/* <div className="flex items-center gap-4 mt-3 justify-end">
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-[#1b6cde]" />
-          <span className="text-[11px] text-fp-muted">Total</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-fp-green" />
-          <span className="text-[11px] text-fp-muted">Productive</span>
-        </div>
-      </div> */}
     </div>
   );
 } 

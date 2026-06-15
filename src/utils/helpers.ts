@@ -21,7 +21,7 @@ export function getWeekStart(date: Date = new Date()): string {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  return d.toISOString().split("T")[0];
+  return d.toLocaleDateString("en-CA");
 }
 
 export function formatDate(dateStr: string): string {
@@ -97,11 +97,11 @@ export function clamp(val: number, min: number, max: number): number {
 }
 
 export function todayString(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date().toLocaleDateString("en-CA");
 }
 
 export function subtractDays(date: string, days: number): string {
   const d = new Date(date);
   d.setDate(d.getDate() - days);
-  return d.toISOString().split("T")[0];
+  return d.toLocaleDateString("en-CA");
 }

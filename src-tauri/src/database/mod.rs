@@ -78,6 +78,7 @@ impl Database {
                 polling_interval_ms INTEGER NOT NULL DEFAULT 1000,
                 idle_threshold_minutes INTEGER NOT NULL DEFAULT 5,
                 launch_on_startup INTEGER NOT NULL DEFAULT 1,
+                start_minimized INTEGER NOT NULL DEFAULT 1,
                 theme TEXT NOT NULL DEFAULT 'dark',
                 database_path TEXT NOT NULL DEFAULT '',
                 notification_enabled INTEGER NOT NULL DEFAULT 1,
@@ -87,6 +88,11 @@ impl Database {
             INSERT OR IGNORE INTO settings (id) VALUES (1);
         ",
         )?;
+
+        let _ = self.conn.execute(
+            "ALTER TABLE settings ADD COLUMN start_minimized INTEGER NOT NULL DEFAULT 1",
+            [],
+        );
 
         // ── Migrations: add new columns if they don't exist ──────────────────
         // display_name: user-facing custom name (NULL = use app_name)
@@ -219,6 +225,28 @@ impl Database {
             log::info!("Migration: added apps.last_limit_notification_date");
         }
 
+        //Ignored Applications
+        let _ = self.conn.execute(
+            "
+    UPDATE apps
+    SET is_ignored = 1
+    WHERE LOWER(app_name) IN (
+        'explorer.exe',
+        'searchhost.exe',
+        'searchapp.exe',
+        'textinputhost.exe',
+        'widgets.exe',
+        'lockapp.exe',
+        'shellexperiencehost.exe',
+        'runtimebroker.exe',
+        'startmenuexperiencehost.exe',
+        'applicationframehost.exe',
+        'dwm.exe'
+    )
+    ",
+            [],
+        );
+
         // Newly added
         let has_last_reminder_notification_date: bool = self
     .conn
@@ -263,14 +291,15 @@ impl Database {
     /// When is_ignored=true the caller must NOT save a session for this app.
     pub fn upsert_app(&self, app_name: &str, executable_path: &str) -> Result<(i64, bool)> {
         let category = auto_categorize(app_name, executable_path);
+        let auto_ignored = auto_ignore_app(app_name, executable_path);
 
-        // Insert only if not already known — never overwrite display_name or is_ignored on conflict
+        // Insert only if not already known - never overwrite display_name or is_ignored on conflict
         self.conn.execute(
-            "INSERT INTO apps (app_name, executable_path, category)
-             VALUES (?1, ?2, ?3)
+            "INSERT INTO apps (app_name, executable_path, category, is_ignored)
+             VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(executable_path) DO UPDATE SET
                  app_name = CASE WHEN display_name IS NULL THEN excluded.app_name ELSE app_name END",
-            params![app_name, executable_path, category],
+            params![app_name, executable_path, category, auto_ignored as i32],
         )?;
 
         let (id, is_ignored): (i64, bool) = self.conn.query_row(
@@ -497,6 +526,25 @@ impl Database {
     pub fn get_today_stats(&self) -> Result<Value> {
         let today = Local::now().format("%Y-%m-%d").to_string();
         self.get_daily_usage(&today)
+    }
+
+    pub fn get_30_day_average(&self) -> Result<i64> {
+        let avg: f64 = self.conn.query_row(
+            "
+        SELECT COALESCE(AVG(day_total), 0)
+        FROM (
+            SELECT DATE(start_time) as day,
+                   SUM(duration_seconds) as day_total
+            FROM usage_sessions
+            WHERE DATE(start_time) >= DATE('now', '-30 day')
+              AND was_idle = 0
+            GROUP BY DATE(start_time)
+        )
+        ",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(avg.round() as i64)
     }
 
     pub fn get_app_limit_status(&self, app_id: i64) -> Result<Option<(i64, i64)>> {
@@ -742,29 +790,77 @@ impl Database {
     }
 
     pub fn get_hourly_heatmap(&self, date: &str) -> Result<Value> {
+        // let mut stmt = self.conn.prepare(
+        //     "SELECT strftime('%H', s.start_time) as hour, SUM(s.duration_seconds) as total
+        //      FROM usage_sessions s
+        //      JOIN apps a ON s.app_id = a.id
+        //      WHERE date(s.start_time) = ?1 AND s.was_idle = 0 AND a.is_ignored = 0
+        //      GROUP BY hour ORDER BY hour",
+        // )?;
         let mut stmt = self.conn.prepare(
-            "SELECT strftime('%H', s.start_time) as hour, SUM(s.duration_seconds) as total
-             FROM usage_sessions s
-             JOIN apps a ON s.app_id = a.id
-             WHERE date(s.start_time) = ?1 AND s.was_idle = 0 AND a.is_ignored = 0
-             GROUP BY hour ORDER BY hour",
+            "SELECT s.start_time, s.end_time
+        FROM usage_sessions s
+        JOIN apps a ON s.app_id = a.id
+        WHERE date(s.start_time) = ?1
+        AND s.was_idle = 0
+        AND a.is_ignored = 0",
         )?;
-        let hours_raw: Vec<(i32, i64)> = stmt
+        // let hours_raw: Vec<(i32, i64)> = stmt
+        //     .query_map(params![date], |row| {
+        //         Ok((
+        //             row.get::<_, String>(0)?.parse::<i32>().unwrap_or(0),
+        //             row.get::<_, i64>(1)?,
+        //         ))
+        //     })?
+        //     .filter_map(|r| r.ok())
+        //     .collect();
+
+        // let mut heatmap = vec![0i64; 24];
+        // for (h, secs) in hours_raw {
+        //     if (0..24).contains(&(h as usize)) {
+        // //         heatmap[h as usize] = secs;
+        //     }
+        // }
+        use chrono::{NaiveDateTime, Timelike};
+
+        let rows: Vec<(String, String)> = stmt
             .query_map(params![date], |row| {
-                Ok((
-                    row.get::<_, String>(0)?.parse::<i32>().unwrap_or(0),
-                    row.get::<_, i64>(1)?,
-                ))
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
             })?
             .filter_map(|r| r.ok())
             .collect();
 
         let mut heatmap = vec![0i64; 24];
-        for (h, secs) in hours_raw {
-            if (0..24).contains(&(h as usize)) {
-                heatmap[h as usize] = secs;
+
+        for (start_str, end_str) in rows {
+            let start = match NaiveDateTime::parse_from_str(&start_str, "%Y-%m-%dT%H:%M:%S") {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let end = match NaiveDateTime::parse_from_str(&end_str, "%Y-%m-%dT%H:%M:%S") {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+
+            let mut current = start;
+
+            while current < end {
+                let hour = current.hour() as usize;
+
+                let next_hour = current.date().and_hms_opt(current.hour(), 59, 59).unwrap()
+                    + chrono::Duration::seconds(1);
+
+                let segment_end = if end < next_hour { end } else { next_hour };
+
+                let secs = (segment_end - current).num_seconds();
+
+                heatmap[hour] += secs;
+
+                current = segment_end;
             }
         }
+
         Ok(json!({ "date": date, "hours": heatmap }))
     }
 
@@ -798,7 +894,7 @@ impl Database {
 
     pub fn get_settings(&self) -> Result<Value> {
         let row = self.conn.query_row(
-            "SELECT polling_interval_ms, idle_threshold_minutes, launch_on_startup,
+            "SELECT polling_interval_ms, idle_threshold_minutes, launch_on_startup, start_minimized,
                     theme, database_path, notification_enabled, daily_goal_minutes
              FROM settings WHERE id = 1",
             [],
@@ -807,10 +903,11 @@ impl Database {
                     "polling_interval_ms":    row.get::<_, i64>(0)?,
                     "idle_threshold_minutes": row.get::<_, i64>(1)?,
                     "launch_on_startup":      row.get::<_, bool>(2)?,
-                    "theme":                  row.get::<_, String>(3)?,
-                    "database_path":          row.get::<_, String>(4)?,
-                    "notification_enabled":   row.get::<_, bool>(5)?,
-                    "daily_goal_minutes":     row.get::<_, i64>(6)?,
+                    "start_minimized": row.get::<_, bool>(3)?,
+                    "theme":                  row.get::<_, String>(4)?,
+                    "database_path":          row.get::<_, String>(5)?,
+                    "notification_enabled":   row.get::<_, bool>(6)?,
+                    "daily_goal_minutes":     row.get::<_, i64>(7)?,
                 }))
             },
         )?;
@@ -834,6 +931,12 @@ impl Database {
             self.conn.execute(
                 "UPDATE settings SET launch_on_startup = ?1 WHERE id = 1",
                 params![v.as_bool().unwrap_or(true) as i32],
+            )?;
+        }
+        if let Some(v) = settings.get("start_minimized") {
+            self.conn.execute(
+                "UPDATE settings SET start_minimized = ?1 WHERE id = 1",
+                params![v.as_bool().unwrap_or(false)],
             )?;
         }
         if let Some(v) = settings.get("theme") {
@@ -941,6 +1044,30 @@ impl Database {
 
         std::fs::copy(&self.db_path, new_path)
             .with_context(|| format!("Cannot copy DB to {}", new_path))?;
+        Ok(())
+    }
+
+    //Reset
+    pub fn reset_tracking_data(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM usage_sessions", [])?;
+        self.conn.execute("DELETE FROM apps", [])?;
+
+        let _ = self.conn.execute("DELETE FROM daily_stats", []);
+        let _ = self.conn.execute("DELETE FROM limit_notifications", []);
+        let _ = self.conn.execute("DELETE FROM reminder_tracking", []);
+        let _ = self.conn.execute("DELETE FROM soft_lock_tracking", []);
+
+        Ok(())
+    }
+
+    pub fn factory_reset(&self) -> Result<()> {
+        self.reset_tracking_data()?;
+
+        self.conn.execute("DELETE FROM settings", [])?;
+
+        self.conn
+            .execute("INSERT OR IGNORE INTO settings (id) VALUES (1)", [])?;
+
         Ok(())
     }
 }
@@ -1083,4 +1210,26 @@ fn auto_categorize(app_name: &str, exe_path: &str) -> &'static str {
 
 fn matches_any(s: &str, patterns: &[&str]) -> bool {
     patterns.iter().any(|p| s.contains(p))
+}
+
+fn auto_ignore_app(app_name: &str, exe_path: &str) -> bool {
+    let lower = app_name.to_lowercase();
+    let path_lower = exe_path.to_lowercase();
+
+    matches_any(
+        &lower,
+        &[
+            "explorer.exe",
+            "searchhost.exe",
+            "searchapp.exe",
+            "textinputhost.exe",
+            "widgets.exe",
+            "lockapp.exe",
+            "shellexperiencehost.exe",
+            "runtimebroker.exe",
+            "startmenuexperiencehost.exe",
+            "applicationframehost.exe",
+            "dwm.exe",
+        ],
+    ) || path_lower.contains("\\windows\\systemapps\\")
 }

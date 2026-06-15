@@ -48,21 +48,23 @@ export default function App() {
   const { view, refreshAll, fetchSettings, fetchAppList } = useStore();
   const [isSoftLockWindow, setIsSoftLockWindow] = useState(false);
 
-  // useEffect(() => {
-  //   const label = getCurrentWindow().label;
+  useEffect(() => {
+    const disableContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
 
-  //   if (label === "soft-lock") {
-  //     setIsSoftLockWindow(true);
-  //   }
-  // }, []);
+    document.addEventListener("contextmenu", disableContextMenu);
+
+    return () => {
+      document.removeEventListener("contextmenu", disableContextMenu);
+    };
+  }, []);
+
   useEffect(() => {
     const label = getCurrentWindow().label;
 
     // if (label.startsWith("soft-lock")) {
-    if (
-      label.startsWith("soft-lock") ||
-      label === "soft-lock-test"
-    ) {
+    if (label.startsWith("soft-lock")) {
       setIsSoftLockWindow(true);
     }
   }, []);

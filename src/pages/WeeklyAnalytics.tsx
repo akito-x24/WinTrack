@@ -35,7 +35,7 @@ export default function WeeklyAnalytics() {
       .finally(() => setLoading(false));
   }, [weekStart]);
 
-  // Always 7 days — empty days get zero values
+  // Always 7 days - empty days get zero values
   const fullWeek = buildFullWeek(weekStart, stats);
 
   const totalActive     = fullWeek.reduce((s, d) => s + d.active_seconds, 0);
@@ -81,13 +81,13 @@ export default function WeeklyAnalytics() {
             sub={activeDays ? `across ${activeDays} active day${activeDays !== 1 ? "s" : ""}`: "no activity yet"  }/>
           </div>
 
-          {/* Chart — always shows all 7 days */}
+          {/* Chart - always shows all 7 days */}
           <div className="fp-card">
             <SectionHeader title="Daily Activity" />
             <WeeklyBarChart data={fullWeek} />
           </div>
 
-          {/* Top apps — only show if there's actual data */}
+          {/* Top apps - only show if there's actual data */}
           {stats?.top_apps && stats.top_apps.length > 0 && (
             <div className="fp-card">
               <SectionHeader title="Top Apps This Week" />
@@ -107,7 +107,7 @@ export default function WeeklyAnalytics() {
             </div>
           )}
 
-          {/* Empty state — only shown when zero activity all week */}
+          {/* Empty state - only shown when zero activity all week */}
           {totalActive === 0 && (
             <div className="fp-card flex flex-col items-center justify-center py-10 text-center">
               <p className="text-fp-muted text-sm">No activity recorded this week yet</p>

@@ -18,22 +18,13 @@ export default function HourlyHeatmap({ date }: Props) {
 
   const getColor = (secs: number) => getHeatmapColor(secs, max);
 
-  // const getColor = (secs: number) => {
-  //   if (secs === 0) return "#1a1e28";
-  //   const pct = secs / max;
-  //   if (pct < 0.25) return "#284161";
-  //   if (pct < 0.5)  return "#2550c8";
-  //   if (pct < 0.75) return "#0749d7";
-  //   return "#0062ff";
-  // };
-
   const hourLabels = [
-    "12a","1","2","3","4","5","6","7","8","9","10","11",
-    "12p","1","2","3","4","5","6","7","8","9","10","11",
+    "0","1","2","3","4","5","6","7","8","9","10","11",
+    "12","13","14","15","16","17","18","19","20","21","22","23"
   ];
 
   // Only show labels at these indices to avoid crowding
-  const showLabel = new Set([0, 3, 6, 9, 12, 15, 18, 21, 24]);
+  const showLabel = new Set([0, 3, 6, 9, 12, 15, 18, 21, 23]);
 
   return (
     <div className="w-full">
@@ -56,7 +47,7 @@ export default function HourlyHeatmap({ date }: Props) {
         ))}
       </div>
 
-      {/* Labels — same flex grid as bars, only render text at sparse intervals */}
+      {/* Labels - same flex grid as bars, only render text at sparse intervals */}
       <div className="flex gap-0.5">
         {Array.from({ length: 24 }, (_, i) => (
           <div key={i} className="flex-1 min-w-0 text-center overflow-hidden">

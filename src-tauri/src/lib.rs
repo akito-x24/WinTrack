@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager,
 };
 use tauri_plugin_autostart::MacosLauncher;
 
@@ -213,21 +214,18 @@ async fn export_data(
 }
 
 #[tauri::command]
+async fn get_30_day_average(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<i64, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.get_30_day_average().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_timeline(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
     date: String,
 ) -> Result<serde_json::Value, String> {
     let state = state.lock().map_err(|e| e.to_string())?;
     state.db.get_timeline(&date).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn backup_database(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    backup_path: String,
-) -> Result<(), String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
-    state.db.backup(&backup_path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -252,75 +250,16 @@ async fn get_current_session(
     }))
 }
 
-/// Move the database file to a new location, update the stored path, and
-/// reopen the connection. Monitoring continues during the move because we
-/// hold the state lock for only the critical section.
 #[tauri::command]
-async fn move_database(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-    new_path: String,
-) -> Result<String, String> {
-    let new_path = new_path.trim().to_string();
-    if new_path.is_empty() {
-        return Err("Path cannot be empty".into());
-    }
-
-    // Validate the parent directory is accessible
-    let parent = std::path::Path::new(&new_path)
-        .parent()
-        .ok_or("Invalid path: no parent directory")?;
-    std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create directory: {}", e))?;
-
-    let mut state = state.lock().map_err(|e| e.to_string())?;
-
-    // Copy existing DB to new location
-    state.db.move_to(&new_path).map_err(|e| e.to_string())?;
-
-    // Reopen at new location
-    let new_db = Database::open(&new_path).map_err(|e| e.to_string())?;
-
-    // Persist new path in the new DB
-    new_db
-        .update_settings(&serde_json::json!({ "database_path": new_path }))
-        .map_err(|e| e.to_string())?;
-
-    state.db = new_db;
-    log::info!("Database moved to {}", new_path);
-    Ok(new_path)
+async fn reset_tracking_data(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.reset_tracking_data().map_err(|e| e.to_string())
 }
 
-/// Reset the database location back to the platform default.
 #[tauri::command]
-async fn reset_database_path(
-    state: tauri::State<'_, Arc<Mutex<AppState>>>,
-) -> Result<String, String> {
-    let default_path = services::default_db_path();
-    let mut state = state.lock().map_err(|e| e.to_string())?;
-
-    let current_path = state.db.db_path.clone();
-
-    // 🛠️ FIX: If we are already at the default path, don't try to copy over ourselves.
-    // std::fs::copy fails if source and destination are the same (especially if file is locked).
-    if current_path == default_path
-        || std::path::Path::new(&current_path).canonicalize().ok()
-            == std::path::Path::new(&default_path).canonicalize().ok()
-    {
-        log::info!("Database is already at default location: {}", default_path);
-        return Ok(default_path);
-    }
-
-    // Move DB to default
-    state.db.move_to(&default_path).map_err(|e| e.to_string())?;
-
-    // Reopen at new location
-    let new_db = Database::open(&default_path).map_err(|e| e.to_string())?;
-    new_db
-        .update_settings(&serde_json::json!({ "database_path": default_path }))
-        .map_err(|e| e.to_string())?;
-
-    state.db = new_db;
-    log::info!("Database reset to default: {}", default_path);
-    Ok(default_path)
+async fn factory_reset(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<(), String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    state.db.factory_reset().map_err(|e| e.to_string())
 }
 
 // ─── App Entry ────────────────────────────────────────────────────────────────
@@ -381,6 +320,19 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            if let Some(window) = app.get_webview_window("main") {
+                let start_minimized = state_for_monitor
+                    .lock()
+                    .ok()
+                    .and_then(|s| s.db.get_settings().ok())
+                    .and_then(|v| v.get("start_minimized").and_then(|x| x.as_bool()))
+                    .unwrap_or(false);
+
+                if start_minimized {
+                    let _ = window.hide();
+                }
+            }
+
             let handle = app.handle().clone();
 
             monitoring::start_monitoring_loop(state_for_monitor, handle);
@@ -398,6 +350,7 @@ pub fn run() {
             get_weekly_usage,
             get_monthly_usage,
             get_app_list,
+            get_30_day_average,
             update_app_category,
             update_app_display_name,
             set_app_ignored,
@@ -413,10 +366,9 @@ pub fn run() {
             export_data,
             get_timeline,
             close_process,
-            backup_database,
             get_current_session,
-            move_database,
-            reset_database_path,
+            reset_tracking_data,
+            factory_reset,
         ])
         .build(tauri::generate_context!())
         .expect("Error building WinTrack app")
