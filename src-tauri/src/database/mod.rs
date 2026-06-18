@@ -4,6 +4,17 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
+use windows::core::PCWSTR;
+use windows::Win32::Storage::FileSystem::{
+    GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
+};
+
+use windows::Win32::UI::Shell::ExtractIconExW;
+use windows::Win32::UI::WindowsAndMessaging::HICON;
+
+use base64::{engine::general_purpose, Engine as _};
+use image::{ImageBuffer, ImageFormat, Rgba};
+
 pub struct Database {
     conn: Connection,
     pub db_path: String,
@@ -41,6 +52,7 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_name TEXT NOT NULL,
                 executable_path TEXT NOT NULL UNIQUE,
+                icon_path TEXT,
                 category TEXT NOT NULL DEFAULT 'Other',
                 icon_data TEXT,
                 first_seen TEXT NOT NULL DEFAULT (datetime('now')),
@@ -94,6 +106,10 @@ impl Database {
             [],
         );
 
+        let _ = self
+            .conn
+            .execute("ALTER TABLE apps ADD COLUMN icon_path TEXT", []);
+
         // ── Migrations: add new columns if they don't exist ──────────────────
         // display_name: user-facing custom name (NULL = use app_name)
         let has_display_name: bool = self
@@ -110,6 +126,36 @@ impl Database {
                 .execute_batch("ALTER TABLE apps ADD COLUMN display_name TEXT;")?;
             log::info!("Migration: added apps.display_name");
         }
+
+        let has_icon_path: bool = self
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='icon_path'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+
+        if !has_icon_path {
+            self.conn
+                .execute_batch("ALTER TABLE apps ADD COLUMN icon_path TEXT;")?;
+
+            log::info!("Migration: added apps.icon_path");
+        }
+
+        self.conn.execute_batch(
+            "
+            UPDATE apps
+                SET display_name =
+                CASE
+                    WHEN LOWER(app_name) LIKE '%.exe'
+                    THEN SUBSTR(app_name, 1, LENGTH(app_name) - 4)
+                    ELSE app_name
+                END
+            WHERE display_name IS NULL;
+            ",
+        )?;
 
         // is_ignored: when true, tracker skips this app entirely
         let has_ignored: bool = self
@@ -293,13 +339,50 @@ impl Database {
         let category = auto_categorize(app_name, executable_path);
         let auto_ignored = auto_ignore_app(app_name, executable_path);
 
+        let display_name = get_friendly_name(executable_path).unwrap_or_else(|| {
+            app_name
+                .strip_suffix(".exe")
+                .unwrap_or(app_name)
+                .to_string()
+        });
+
+        let icon_path = format!(
+            r"C:\ProgramData\WinTrack\Database\Icons\{}.png",
+            display_name.to_lowercase()
+        );
+
+        let existing_icon: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT icon_data FROM apps WHERE executable_path = ?1",
+                params![executable_path],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .unwrap_or(None);
+
+        let icon_data = if existing_icon.is_none() {
+            println!("EXTRACTING ICON: {}", executable_path);
+            extract_icon_base64(executable_path)
+        } else {
+            existing_icon
+        };
+
         // Insert only if not already known - never overwrite display_name or is_ignored on conflict
         self.conn.execute(
-            "INSERT INTO apps (app_name, executable_path, category, is_ignored)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(executable_path) DO UPDATE SET
-                 app_name = CASE WHEN display_name IS NULL THEN excluded.app_name ELSE app_name END",
-            params![app_name, executable_path, category, auto_ignored as i32],
+            "INSERT INTO apps (
+                app_name, display_name, executable_path, icon_path, icon_data, category, is_ignored)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                ON CONFLICT(executable_path) DO UPDATE SET
+                    app_name = app_name",
+            params![
+                app_name,
+                display_name,
+                executable_path,
+                icon_path,
+                icon_data,
+                category,
+                auto_ignored as i32
+            ],
         )?;
 
         let (id, is_ignored): (i64, bool) = self.conn.query_row(
@@ -307,6 +390,7 @@ impl Database {
             params![executable_path],
             |row| Ok((row.get(0)?, row.get::<_, bool>(1)?)),
         )?;
+
         Ok((id, is_ignored))
     }
 
@@ -428,6 +512,8 @@ impl Database {
                     COALESCE(display_name, app_name) as display_name,
                     app_name,
                     executable_path,
+                    icon_path,
+                    icon_data,
                     category,
                     is_ignored,
                     daily_limit_minutes,
@@ -457,13 +543,15 @@ impl Database {
                     "display_name":             row.get::<_, String>(1)?,
                     "app_name":                 row.get::<_, String>(2)?,
                     "executable_path":          row.get::<_, String>(3)?,
-                    "category":                 row.get::<_, String>(4)?,
-                    "is_ignored":               row.get::<_, bool>(5)?,
-                    "daily_limit_minutes":      row.get::<_, Option<i64>>(6)?,
-                    "reminder_interval_minutes": row.get::<_, i64>(7)?,
-                    "soft_lock_enabled":        row.get::<_, bool>(8)?,
-                    "total_seconds":            row.get::<_, i64>(9)?,
-                    "today_seconds":            row.get::<_, i64>(10)?,
+                    "icon_path":                row.get::<_, Option<String>>(4)?,
+                    "icon_data":                row.get::<_, Option<String>>(5)?,
+                    "category":                 row.get::<_, String>(6)?,
+                    "is_ignored":               row.get::<_, bool>(7)?,
+                    "daily_limit_minutes":      row.get::<_, Option<i64>>(8)?,
+                    "reminder_interval_minutes": row.get::<_, i64>(9)?,
+                    "soft_lock_enabled":        row.get::<_, bool>(10)?,
+                    "total_seconds":            row.get::<_, i64>(11)?,
+                    "today_seconds":            row.get::<_, i64>(12)?,
                 }))
             })?
             .filter_map(|r| r.ok())
@@ -1232,4 +1320,158 @@ fn auto_ignore_app(app_name: &str, exe_path: &str) -> bool {
             "dwm.exe",
         ],
     ) || path_lower.contains("\\windows\\systemapps\\")
+}
+#[allow(dead_code)]
+fn get_file_description(exe_path: &str) -> Option<String> {
+    let wide_path: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
+
+    unsafe {
+        let mut handle = 0u32;
+
+        let size = GetFileVersionInfoSizeW(PCWSTR(wide_path.as_ptr()), Some(&mut handle));
+
+        if size == 0 {
+            return None;
+        }
+
+        let mut buffer = vec![0u8; size as usize];
+
+        if !GetFileVersionInfoW(
+            PCWSTR(wide_path.as_ptr()),
+            0,
+            size,
+            buffer.as_mut_ptr() as *mut _,
+        )
+        .is_err()
+        {
+            return None;
+        }
+
+        let query: Vec<u16> = "\\StringFileInfo\\040904B0\\FileDescription"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let mut ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+        let mut len = 0u32;
+
+        if !VerQueryValueW(
+            buffer.as_ptr() as *const _,
+            PCWSTR(query.as_ptr()),
+            &mut ptr,
+            &mut len,
+        )
+        .as_bool()
+        {
+            return None;
+        }
+
+        if ptr.is_null() || len == 0 {
+            return None;
+        }
+
+        let slice = std::slice::from_raw_parts(ptr as *const u16, len as usize);
+
+        let text = String::from_utf16_lossy(slice)
+            .trim_matches('\0')
+            .trim()
+            .to_string();
+
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn extract_icon_base64(exe_path: &str) -> Option<String> {
+    let wide: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
+
+    let mut large_icon = HICON::default();
+
+    let count = unsafe { ExtractIconExW(PCWSTR(wide.as_ptr()), 0, Some(&mut large_icon), None, 1) };
+
+    if count == 0 {
+        return None;
+    }
+
+    // 1x1 transparent PNG
+    Some(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0nQAAAAASUVORK5CYII="
+        .to_string(),
+)
+}
+
+#[allow(dead_code)]
+fn test_icon_extract(exe_path: &str) {
+    let wide: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
+
+    let mut large_icon = HICON::default();
+
+    let count = unsafe { ExtractIconExW(PCWSTR(wide.as_ptr()), 0, Some(&mut large_icon), None, 1) };
+
+    println!("ICON COUNT = {}", count);
+}
+
+use std::collections::HashMap;
+use std::fs;
+
+fn get_friendly_name(executable_path: &str) -> Option<String> {
+    let exe_name = Path::new(executable_path)
+        .file_name()?
+        .to_string_lossy()
+        .to_lowercase();
+
+    let mut folders = Vec::new();
+
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        folders.push(format!(
+            r"{}\Microsoft\Windows\Start Menu\Programs",
+            appdata
+        ));
+    }
+
+    folders.push(r"C:\ProgramData\Microsoft\Windows\Start Menu\Programs".to_string());
+
+    for folder in folders {
+        if let Some(name) = scan_start_menu_folder(&folder, &exe_name) {
+            return Some(name);
+        }
+    }
+
+    None
+}
+
+fn scan_start_menu_folder(folder: &str, exe_name: &str) -> Option<String> {
+    fn recurse(dir: &Path, exe_name: &str) -> Option<String> {
+        let entries = fs::read_dir(dir).ok()?;
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if path.is_dir() {
+                if let Some(found) = recurse(&path, exe_name) {
+                    return Some(found);
+                }
+            }
+
+            if path.extension().map(|e| e == "lnk").unwrap_or(false) {
+                let stem = path.file_stem()?.to_string_lossy().to_string();
+
+                let normalized = stem.replace(' ', "").to_lowercase();
+
+                let exe_normalized = exe_name.replace(".exe", "").to_lowercase();
+
+                if normalized.contains(&exe_normalized) || exe_normalized.contains(&normalized) {
+                    return Some(stem);
+                }
+            }
+        }
+
+        None
+    }
+
+    recurse(Path::new(folder), exe_name)
 }

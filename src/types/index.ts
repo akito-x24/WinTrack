@@ -14,6 +14,8 @@ export interface App {
 
   total_seconds: number;
   today_seconds?: number;
+  icon_path?: string | null;
+  icon_data?: string | null;
 }
 
 export type AppCategory =

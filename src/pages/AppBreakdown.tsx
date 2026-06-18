@@ -182,6 +182,11 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
   useEffect(() => { setNameInput(app.display_name); }, [app.display_name]);
 
+  console.log(
+    app.app_name,
+    app.icon_data?.substring(0, 50)
+  );
+
   return (
     <tr className={clsx(
       "group hover:bg-fp-surface/50 transition-colors",
@@ -189,13 +194,22 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
     )}>
       <td className="px-5 py-3">
         <div className="flex items-center gap-4">
+
           {/* Icon */}
-          <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-medium shrink-0"
-            style={{ backgroundColor: bgColor }}
-          >
-            {initials}
-          </div>
+          {app.icon_data ? (
+            <img
+              src={`data:image/png;base64,${app.icon_data}`}
+              alt={app.display_name}
+              className="w-9 h-9 rounded-lg shrink-0"
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-medium shrink-0"
+              style={{ backgroundColor: bgColor }}
+            >
+              {initials}
+            </div>
+          )}
 
           {/* Name + path */}
           <div className="min-w-0 flex-1">

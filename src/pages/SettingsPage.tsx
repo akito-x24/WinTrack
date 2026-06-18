@@ -86,32 +86,6 @@ export default function SettingsPage() {
     }
   };
 
-  // const resetTrackingData = async () => {
-  //   if (!confirm("Delete all tracking history?")) return;
-
-  //   await api.resetTrackingData();
-
-  //   await Promise.all([
-  //     refreshAll(),
-  //     fetchAppList(),
-  //     fetchSettings(),
-  //   ]);
-  // };
-
-  // const factoryReset = async () => {
-  //   if (!confirm("Delete all tracking history and settings?")) return;
-
-  //   await api.factoryReset();
-
-  //   await Promise.all([
-  //     refreshAll(),
-  //     fetchAppList(),
-  //     fetchSettings(),
-  //   ]);
-
-  //   window.location.reload();
-  // };
-
   const resetTrackingData = () => {
     setPendingReset(prev =>
       prev === "reset" ? "none" : "reset"
@@ -206,7 +180,8 @@ export default function SettingsPage() {
             onClick={resetTrackingData}
             className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${pendingReset === "reset"
                 ? "border-yellow-500 text-yellow-400 bg-yellow-500/10"
-                : "border-fp-border hover:bg-fp-border"
+                // : "border-fp-border hover:bg-fp-border"
+                : "border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
               }`}
           >
             {pendingReset === "reset"
