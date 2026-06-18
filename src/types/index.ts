@@ -14,7 +14,6 @@ export interface App {
 
   total_seconds: number;
   today_seconds?: number;
-  icon_path?: string | null;
   icon_data?: string | null;
 }
 
@@ -31,6 +30,7 @@ export interface UsageSession {
   app_name: string;
   executable_path: string;
   category: AppCategory;
+  icon_data?: string | null;
   window_title: string | null;
   start_time: string;
   end_time: string | null;
@@ -50,6 +50,7 @@ export interface AppUsage {
   app_name: string;
   executable_path: string;
   category: AppCategory;
+  icon_data?: string | null;
   duration_seconds: number;
   sessions: number;
 }
@@ -92,8 +93,6 @@ export interface Settings {
   idle_threshold_minutes: number;
   launch_on_startup: boolean;
   start_minimized: boolean;
-  theme: "dark";
-  database_path: string;
   notification_enabled: boolean;
   daily_goal_minutes: number;
 }
@@ -104,21 +103,12 @@ export interface CurrentSession {
   is_idle: boolean;
 }
 
-// export const CATEGORY_COLORS: Record<AppCategory, string> = {
-//   Productive: "#22c55e",
-//   Entertainment: "#f59e0b",
-//   Social: "#8b5cf6",
-//   Gaming: "#ef4444",
-//   Development: "#3b82f6",
-//   Study: "#f313eb",
-//   Other: "#64748b",
-// };
 export const CATEGORY_COLORS: Record<AppCategory, string> = {
   Development: "#0066FF",   // Electric Blue
-  Productive: "#00E5FF",    // Neon Cyan
+  Productive: "#FFB000",    // Neon Cyan
   Study: "#8B5CF6",         // Purple
   Social: "#FF2EA6",        // Neon Pink
-  Entertainment: "#FFB000", // Gold
+  Entertainment: "#00E5FF", // Gold
   Gaming: "#FF4D00",        // Orange-Red
   Other: "#94A3B8",         // Slate
 };

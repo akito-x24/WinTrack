@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "../store";
-import { CategoryBadge, LoadingSpinner, EmptyState } from "../components/ui";
-import { getAppIcon, getAppInitials, formatDuration } from "../utils/helpers";
+import { AppIcon, CategoryBadge, LoadingSpinner, EmptyState } from "../components/ui";
+import { formatDuration } from "../utils/helpers";
 import { CATEGORY_LABELS, CATEGORY_COLORS } from "../types";
 import type { App, AppCategory } from "../types";
 import clsx from "clsx";
@@ -172,8 +172,6 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
   onSaveCat: (cat: AppCategory) => void;
   onToggleIgnore: () => void;
 }) {
-  const bgColor = getAppIcon(app.app_name);
-  const initials = getAppInitials(app.app_name);
   const [nameInput, setNameInput] = useState(app.display_name);
   const [editingLimit, setEditingLimit] = useState(false);
   const [limitInput, setLimitInput] = useState(app.daily_limit_minutes?.toString() ?? "");
@@ -181,11 +179,6 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
   const [editingSoftLock, setEditingSoftLock] = useState(false);
 
   useEffect(() => { setNameInput(app.display_name); }, [app.display_name]);
-
-  console.log(
-    app.app_name,
-    app.icon_data?.substring(0, 50)
-  );
 
   return (
     <tr className={clsx(
@@ -196,20 +189,11 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
         <div className="flex items-center gap-4">
 
           {/* Icon */}
-          {app.icon_data ? (
-            <img
-              src={`data:image/png;base64,${app.icon_data}`}
-              alt={app.display_name}
-              className="w-9 h-9 rounded-lg shrink-0"
-            />
-          ) : (
-            <div
-              className="w-9 h-9 rounded-lg flex items-center justify-center text-white text-sm font-medium shrink-0"
-              style={{ backgroundColor: bgColor }}
-            >
-              {initials}
-            </div>
-          )}
+          <AppIcon
+            name={app.display_name || app.app_name}
+            iconData={app.icon_data}
+            className="w-9 h-9"
+          />
 
           {/* Name + path */}
           <div className="min-w-0 flex-1">
@@ -234,17 +218,6 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
                   <button onClick={onClose} className="text-xs text-fp-red hover:text-fp-red/80">✕</button>
                 </div>
               ) : (
-                // <div className="flex items-center gap-1.5 group/name">
-                //   <span className="text-sm font-medium text-fp-text truncate">{app.display_name}</span>
-                //   {app.display_name !== app.app_name && (
-                //     <span className="text-xs text-fp-muted truncate">({app.app_name})</span>
-                //   )}
-                //   <button
-                //     onClick={() => onOpenEdit("name")}
-                //     className="text-fp-muted hover:text-fp-accent opacity-0 group-hover/name:opacity-100 transition-opacity text-xs ml-0.5"
-                //     title="Rename app"
-                //   >✎</button>
-                // </div>
                 <div className="flex items-center gap-1.5 group/name">
                   <span className="text-sm font-medium text-fp-text truncate">
                     {app.display_name || app.app_name}

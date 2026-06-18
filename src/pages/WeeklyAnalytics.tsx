@@ -98,6 +98,7 @@ export default function WeeklyAnalytics() {
                     name={app.app_name}
                     exePath={app.executable_path}
                     category={app.category}
+                    iconData={app.icon_data}
                     durationSeconds={app.duration_seconds}
                     maxSeconds={Math.max(...stats.top_apps.map(x => x.duration_seconds), 1)}
                     rank={i + 1}

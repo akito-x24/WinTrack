@@ -3,6 +3,7 @@ import { useStore } from "../store";
 import { api } from "../utils/api";
 import {
   StatCard,
+  AppIcon,
   AppRow,
   SectionHeader,
   LoadingSpinner,
@@ -101,6 +102,15 @@ export default function DailyAnalytics() {
               value={topApp?.app_name ?? "None"}
               sub={topApp ? formatDuration(topApp.duration_seconds) : "No usage"}
               accent="#06b6d4"
+              icon={
+                topApp ? (
+                  <AppIcon
+                    name={topApp.app_name}
+                    iconData={topApp.icon_data}
+                    className="w-7 h-7"
+                  />
+                ) : undefined
+              }
             />
           </div>
 
@@ -122,6 +132,7 @@ export default function DailyAnalytics() {
                       name={app.app_name}
                       exePath={app.executable_path}
                       category={app.category}
+                      iconData={app.icon_data}
                       durationSeconds={app.duration_seconds}
                       maxSeconds={stats.apps[0].duration_seconds}
                       rank={i + 1}

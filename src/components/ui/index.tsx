@@ -38,16 +38,56 @@ interface AppRowProps {
   name: string;
   exePath: string;
   category: AppCategory;
+  iconData?: string | null;
   durationSeconds: number;
   maxSeconds: number;
   rank?: number;
 }
 
-export function AppRow({ name, exePath, category, durationSeconds, maxSeconds, rank }: AppRowProps) {
-  const pct = percentOf(durationSeconds, maxSeconds);
-  const color = CATEGORY_COLORS[category] || "#64748b";
+interface AppIconProps {
+  name: string;
+  iconData?: string | null;
+  className?: string;
+}
+
+export function AppIcon({ name, iconData, className = "w-8 h-8" }: AppIconProps) {
   const initials = getAppInitials(name);
   const bgColor = getAppIcon(name);
+
+  if (iconData) {
+    return (
+      <img
+        src={`data:image/png;base64,${iconData}`}
+        alt=""
+        className={clsx(className, "object-contain shrink-0")}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={clsx(
+        className,
+        "rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
+      )}
+      style={{ background: bgColor + "33", color: bgColor, border: `1px solid ${bgColor}33` }}
+    >
+      {initials || "?"}
+    </div>
+  );
+}
+
+export function AppRow({
+  name,
+  exePath,
+  category,
+  iconData,
+  durationSeconds,
+  maxSeconds,
+  rank,
+}: AppRowProps) {
+  const pct = percentOf(durationSeconds, maxSeconds);
+  const color = CATEGORY_COLORS[category] || "#64748b";
 
   return (
     <div className="flex items-center gap-3 py-2.5 group">
@@ -56,13 +96,9 @@ export function AppRow({ name, exePath, category, durationSeconds, maxSeconds, r
       )}
 
       {/* Icon */}
-      <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
-        style={{ background: bgColor + "33", color: bgColor, border: `1px solid ${bgColor}33` }}
-        title={exePath}
-      >
-        {initials || "?"}
-      </div>
+      <span title={exePath}>
+        <AppIcon name={name} iconData={iconData} />
+      </span>
 
       {/* Name + bar */}
       <div className="flex-1 min-w-0">

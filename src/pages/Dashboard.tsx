@@ -1,6 +1,7 @@
 import { useStore } from "../store";
 import {
   StatCard,
+  AppIcon,
   AppRow,
   SectionHeader,
   EmptyState,
@@ -54,6 +55,15 @@ export default function Dashboard() {
               : "No usage"
           }
           accent="#06b6d4"
+          icon={
+            stats?.apps?.[0] ? (
+              <AppIcon
+                name={stats.apps[0].app_name}
+                iconData={stats.apps[0].icon_data}
+                className="w-7 h-7"
+              />
+            ) : undefined
+          }
         />
       </div>
 
@@ -69,6 +79,7 @@ export default function Dashboard() {
                   name={app.app_name}
                   exePath={app.executable_path}
                   category={app.category}
+                  iconData={app.icon_data}
                   durationSeconds={app.duration_seconds}
                   maxSeconds={stats.apps[0].duration_seconds}
                   rank={i + 1}

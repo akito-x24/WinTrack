@@ -34,6 +34,10 @@ export const api = {
   updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", { appId: app_id, limitMinutes: limit_minutes }),
 
   closeProcess: (process_name: string) => call<void>("close_process", { processName: process_name }),
+  
+  //COMING SOON - FEATURE UNDER PROGRESS
+  // Grant 5 more minutes to an app that reached its limit
+  grantAppMoreTime: (app_id: number) => call<void>("grant_app_more_time", { appId: app_id }),
 
   resetTrackingData: () => call<void>("reset_tracking_data"),
   factoryReset: () => call<void>("factory_reset"),

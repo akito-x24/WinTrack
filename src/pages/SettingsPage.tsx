@@ -4,19 +4,6 @@ import { LoadingSpinner } from "../components/ui";
 import { api } from "../utils/api";
 import type { Settings } from "../types";
 
-// Apply theme to <html> immediately and persist across reloads
-function applyTheme(theme: string) {
-  const root = document.documentElement;
-  root.classList.remove("dark", "light");
-  if (theme === "system") {
-    root.classList.add(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  } else {
-    root.classList.add(theme);
-  }
-  // Persist so it's applied on next load before React mounts
-  localStorage.setItem("fp-theme", theme);
-}
-
 export default function SettingsPage() {
   const {
     settings,
@@ -30,8 +17,6 @@ export default function SettingsPage() {
   const [pendingReset, setPendingReset] = useState<
     "none" | "reset" | "factory"
   >("none");
-  const [dbStatus, setDbStatus] = useState<{ msg: string; ok: boolean } | null>(null);
-  const [dbMoving, setDbMoving] = useState(false);
 
   useEffect(() => { fetchSettings(); }, []);
   useEffect(() => { if (settings) setLocal({ ...settings }); }, [settings]);
@@ -40,7 +25,6 @@ export default function SettingsPage() {
     setLocal(prev => {
       if (!prev) return null;
       const next = { ...prev, [key]: val };
-      if (key === "theme") applyTheme(val as string);
       return next;
     });
   };

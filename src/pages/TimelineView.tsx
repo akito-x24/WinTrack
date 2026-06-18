@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../utils/api";
-import { CategoryBadge, LoadingSpinner } from "../components/ui";
+import { AppIcon, CategoryBadge, LoadingSpinner } from "../components/ui";
 import { todayString, subtractDays, formatTime, formatDuration } from "../utils/helpers";
 import { CATEGORY_COLORS } from "../types";
 import type { Timeline, UsageSession } from "../types";
@@ -68,6 +68,11 @@ function SessionRow({ session }: { session: UsageSession }) {
       </div>
       {/* Color bar */}
       <div className="w-1 self-stretch rounded-full shrink-0" style={{ background: color }} />
+      <AppIcon
+        name={session.app_name}
+        iconData={session.icon_data}
+        className="w-8 h-8"
+      />
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">

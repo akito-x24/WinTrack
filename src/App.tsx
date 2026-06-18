@@ -13,37 +13,6 @@ import ExportCenter from "./pages/ExportCenter";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import SoftLockPage from "./pages/SoftLockPage";
 
-// 🔍 Component to handle Theme changes
-function ThemeHandler() {
-  const theme = useStore(s => s.settings?.theme);
-
-  useEffect(() => {
-    const root = document.documentElement;
-
-    // Clean slate
-    root.classList.remove("dark");
-
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else if (theme === "system") {
-      // Check system preference
-      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-      if (mediaQuery.matches) root.classList.add("dark");
-
-      // Listen for changes
-      const handler = (e: MediaQueryListEvent) => {
-        if (e.matches) root.classList.add("dark");
-        else root.classList.remove("dark");
-      };
-      mediaQuery.addEventListener("change", handler);
-      return () => mediaQuery.removeEventListener("change", handler);
-    }
-    // If "light", do nothing (keep dark class off)
-  }, [theme]);
-
-  return null;
-}
-
 export default function App() {
   const { view, refreshAll, fetchSettings, fetchAppList } = useStore();
   const [isSoftLockWindow, setIsSoftLockWindow] = useState(false);
@@ -101,7 +70,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-fp-bg text-fp-text font-sans">
-      <ThemeHandler /> {/* 👈 Injected here */}
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />

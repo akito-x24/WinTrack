@@ -166,7 +166,6 @@ Handled by `tauri-plugin-autostart`. On Windows this writes a registry key to:
 ```sql
 apps (id, app_name, executable_path, category, first_seen)
 usage_sessions (id, app_id, window_title, start_time, end_time, duration_seconds, was_idle)
-daily_stats (id, date, total_usage_seconds)
 settings (id, polling_interval_ms, idle_threshold_minutes, launch_on_startup, theme, ...)
 ```
 

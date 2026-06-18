@@ -7,6 +7,7 @@ import {
 } from "recharts";
 
 import { CATEGORY_COLORS } from "../../types";
+import { AppIcon } from "../ui";
 import { formatDuration } from "../../utils/helpers";
 
 import type {
@@ -19,16 +20,6 @@ interface Props {
   apps: AppUsage[];
 }
 
-// const CATEGORY_SHADES: Record<string, string[]> = {
-//   Development: ["#2563eb", "#3b82f6", "#60a5fa", "#93c5fd"],
-//   Study: ["#c026d3", "#d946ef", "#e879f9", "#f0abfc"],
-//   Productive: ["#16a34a", "#22c55e", "#4ade80", "#86efac"],
-//   Entertainment: ["#d97706", "#f59e0b", "#fbbf24", "#fde68a"],
-//   Social: ["#7c3aed", "#8b5cf6", "#a78bfa", "#c4b5fd"],
-//   Gaming: ["#dc2626", "#ef4444", "#f87171", "#fca5a5"],
-//   Other: ["#475569", "#64748b", "#94a3b8", "#cbd5e1"],
-// };
-
 const CATEGORY_SHADES: Record<string, string[]> = {
   Development: [
     "#3385FF",
@@ -38,10 +29,10 @@ const CATEGORY_SHADES: Record<string, string[]> = {
   ],
 
   Productive: [
-    "#4DEEFF",
-    "#80F3FF",
-    "#B3F8FF",
-    "#D9FCFF",
+    "#FFC233",
+    "#FFD466",
+    "#FFE699",
+    "#FFF2CC",
   ],
 
   Study: [
@@ -59,10 +50,10 @@ const CATEGORY_SHADES: Record<string, string[]> = {
   ],
 
   Entertainment: [
-    "#FFC233",
-    "#FFD466",
-    "#FFE699",
-    "#FFF2CC",
+    "#4DEEFF",
+    "#80F3FF",
+    "#B3F8FF",
+    "#D9FCFF",
   ],
 
   Gaming: [
@@ -105,6 +96,7 @@ export default function CategoryPieChart({
     name: string;
     value: number;
     color: string;
+    iconData?: string | null;
   }[] = [];
 
   for (const category of categories) {
@@ -124,6 +116,7 @@ export default function CategoryPieChart({
         name: app.app_name,
         value: app.duration_seconds,
         color: shades[index % shades.length],
+        iconData: app.icon_data,
       });
     });
   }
@@ -136,9 +129,18 @@ export default function CategoryPieChart({
 
     return (
       <div className="bg-fp-card border border-fp-border rounded-lg px-3 py-2">
-        <p className="text-xs font-medium text-fp-text">
-          {payload[0].name}
-        </p>
+        <div className="flex items-center gap-2">
+          {payload[0].payload.iconData && (
+            <AppIcon
+              name={payload[0].name}
+              iconData={payload[0].payload.iconData}
+              className="w-5 h-5"
+            />
+          )}
+          <p className="text-xs font-medium text-fp-text">
+            {payload[0].name}
+          </p>
+        </div>
         <p className="text-xs text-fp-muted">
           {formatDuration(payload[0].value)}
         </p>
