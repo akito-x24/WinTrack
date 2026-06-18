@@ -262,6 +262,23 @@ async fn factory_reset(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<
     state.db.factory_reset().map_err(|e| e.to_string())
 }
 
+//COMING SOON - FEATURE UNDER PROGRESS
+// #[tauri::command]
+// async fn grant_app_more_time(
+//     state: tauri::State<'_, Arc<Mutex<AppState>>>,
+//     app_id: i64,
+// ) -> Result<(), String> {
+//     let state = state.lock().map_err(|e| e.to_string())?;
+    
+//     // Reset limit reached flag to allow 5 more minutes
+//     state
+//         .db
+//         .reset_app_limit_flag(app_id)
+//         .map_err(|e| e.to_string())?;
+
+//     Ok(())
+// }
+
 // ─── App Entry ────────────────────────────────────────────────────────────────
 
 pub fn run() {
@@ -369,6 +386,9 @@ pub fn run() {
             get_current_session,
             reset_tracking_data,
             factory_reset,
+
+            //COMING SOON - FEATURE UNDER PROGRESS
+            // grant_app_more_time,
         ])
         .build(tauri::generate_context!())
         .expect("Error building WinTrack app")

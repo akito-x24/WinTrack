@@ -4,16 +4,26 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-use windows::core::PCWSTR;
+use windows::core::{Interface, PCWSTR};
+use windows::Win32::Graphics::Gdi::{
+    CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, BITMAP, BITMAPINFO,
+    BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
+};
 use windows::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
 };
 
-use windows::Win32::UI::Shell::ExtractIconExW;
-use windows::Win32::UI::WindowsAndMessaging::HICON;
+use windows::Win32::UI::Shell::{
+    ExtractIconExW, IShellItem, IShellItemImageFactory, SHCreateItemFromParsingName,
+    SIIGBF_RESIZETOFIT,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    DestroyIcon, GetIconInfo, PrivateExtractIconsW, HICON, ICONINFO,
+};
 
 use base64::{engine::general_purpose, Engine as _};
 use image::{ImageBuffer, ImageFormat, Rgba};
+use std::io::Cursor;
 
 pub struct Database {
     conn: Connection,
@@ -52,7 +62,6 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_name TEXT NOT NULL,
                 executable_path TEXT NOT NULL UNIQUE,
-                icon_path TEXT,
                 category TEXT NOT NULL DEFAULT 'Other',
                 icon_data TEXT,
                 first_seen TEXT NOT NULL DEFAULT (datetime('now')),
@@ -74,16 +83,6 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_sessions_app_id ON usage_sessions(app_id);
             CREATE INDEX IF NOT EXISTS idx_sessions_start_date ON usage_sessions(date(start_time));
 
-            CREATE TABLE IF NOT EXISTS daily_stats (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                date TEXT NOT NULL UNIQUE,
-                total_usage_seconds INTEGER NOT NULL DEFAULT 0,
-                productive_seconds INTEGER NOT NULL DEFAULT 0,
-                distracting_seconds INTEGER NOT NULL DEFAULT 0,
-                idle_seconds INTEGER NOT NULL DEFAULT 0
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date);
 
             CREATE TABLE IF NOT EXISTS settings (
                 id INTEGER PRIMARY KEY DEFAULT 1,
@@ -91,8 +90,6 @@ impl Database {
                 idle_threshold_minutes INTEGER NOT NULL DEFAULT 5,
                 launch_on_startup INTEGER NOT NULL DEFAULT 1,
                 start_minimized INTEGER NOT NULL DEFAULT 1,
-                theme TEXT NOT NULL DEFAULT 'dark',
-                database_path TEXT NOT NULL DEFAULT '',
                 notification_enabled INTEGER NOT NULL DEFAULT 1,
                 daily_goal_minutes INTEGER NOT NULL DEFAULT 480
             );
@@ -105,10 +102,6 @@ impl Database {
             "ALTER TABLE settings ADD COLUMN start_minimized INTEGER NOT NULL DEFAULT 1",
             [],
         );
-
-        let _ = self
-            .conn
-            .execute("ALTER TABLE apps ADD COLUMN icon_path TEXT", []);
 
         // ── Migrations: add new columns if they don't exist ──────────────────
         // display_name: user-facing custom name (NULL = use app_name)
@@ -137,11 +130,27 @@ impl Database {
             .unwrap_or(0)
             > 0;
 
-        if !has_icon_path {
+        if has_icon_path {
             self.conn
-                .execute_batch("ALTER TABLE apps ADD COLUMN icon_path TEXT;")?;
+                .execute_batch("ALTER TABLE apps DROP COLUMN icon_path;")?;
+            log::info!("Migration: removed obsolete apps.icon_path");
+        }
 
-            log::info!("Migration: added apps.icon_path");
+        self.conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS migrations (
+                name TEXT PRIMARY KEY,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            ",
+        )?;
+        let refreshed_icons = self.conn.execute(
+            "INSERT OR IGNORE INTO migrations (name) VALUES ('refresh_icons_v2')",
+            [],
+        )?;
+        if refreshed_icons > 0 {
+            self.conn.execute("UPDATE apps SET icon_data = NULL", [])?;
+            log::info!("Migration: queued icons for high-resolution re-extraction");
         }
 
         self.conn.execute_batch(
@@ -328,13 +337,56 @@ impl Database {
             log::info!("Migration: added apps.last_reminder_usage_seconds");
         }
 
-        Ok(())
-    }
+        //COMING SOON - FEATURE UNDER PROGRESS
+        // Create app_locks table for tracking soft-lock lockouts
+    //     let has_app_locks: bool = self
+    //         .conn
+    //         .query_row(
+    //             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_locks'",
+    //             [],
+    //             |r| r.get::<_, i64>(0),
+    //         )
+    //         .unwrap_or(0)
+    //         > 0;
 
-    // ─── App Management ──────────────────────────────────────────────────────
+    //     if !has_app_locks {
+    //         self.conn.execute_batch(
+    //             "CREATE TABLE IF NOT EXISTS app_locks (
+    //                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+    //                 app_id INTEGER NOT NULL,
+    //                 lock_start TEXT NOT NULL DEFAULT (datetime('now')),
+    //                 lock_expiration TEXT NOT NULL,
+    //                 reason TEXT NOT NULL DEFAULT 'limit_reached',
+    //                 FOREIGN KEY (app_id) REFERENCES apps(id)
+    //             );
+    //             CREATE INDEX IF NOT EXISTS idx_locks_app_id ON app_locks(app_id);
+    //             CREATE INDEX IF NOT EXISTS idx_locks_expiration ON app_locks(lock_expiration);
+    //             ",
+    //         )?;
+    //         log::info!("Migration: created app_locks table");
+    //     }
 
-    /// Insert or update app record. Returns (app_id, is_ignored).
-    /// When is_ignored=true the caller must NOT save a session for this app.
+    //     // Track limit reached events to prevent window spam
+    //     let has_limit_reached_today: bool = self
+    //         .conn
+    //         .query_row(
+    //             "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='limit_reached_today'",
+    //             [],
+    //             |r| r.get::<_, i64>(0),
+    //         )
+    //         .unwrap_or(0)
+    //         > 0;
+
+    //     if !has_limit_reached_today {
+    //         self.conn.execute_batch(
+    //             "ALTER TABLE apps ADD COLUMN limit_reached_today INTEGER NOT NULL DEFAULT 0;",
+    //         )?;
+    //         log::info!("Migration: added apps.limit_reached_today");
+    //     }
+
+    //     Ok(())
+    // }
+
     pub fn upsert_app(&self, app_name: &str, executable_path: &str) -> Result<(i64, bool)> {
         let category = auto_categorize(app_name, executable_path);
         let auto_ignored = auto_ignore_app(app_name, executable_path);
@@ -346,11 +398,6 @@ impl Database {
                 .to_string()
         });
 
-        let icon_path = format!(
-            r"C:\ProgramData\WinTrack\Database\Icons\{}.png",
-            display_name.to_lowercase()
-        );
-
         let existing_icon: Option<String> = self
             .conn
             .query_row(
@@ -361,8 +408,7 @@ impl Database {
             .unwrap_or(None);
 
         let icon_data = if existing_icon.is_none() {
-            println!("EXTRACTING ICON: {}", executable_path);
-            extract_icon_base64(executable_path)
+            extract_icon_base64(executable_path).or_else(|| Some(String::new()))
         } else {
             existing_icon
         };
@@ -370,15 +416,15 @@ impl Database {
         // Insert only if not already known - never overwrite display_name or is_ignored on conflict
         self.conn.execute(
             "INSERT INTO apps (
-                app_name, display_name, executable_path, icon_path, icon_data, category, is_ignored)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                app_name, display_name, executable_path, icon_data, category, is_ignored)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                 ON CONFLICT(executable_path) DO UPDATE SET
-                    app_name = app_name",
+                    app_name = apps.app_name,
+                    icon_data = COALESCE(apps.icon_data, excluded.icon_data)",
             params![
                 app_name,
                 display_name,
                 executable_path,
-                icon_path,
                 icon_data,
                 category,
                 auto_ignored as i32
@@ -512,7 +558,6 @@ impl Database {
                     COALESCE(display_name, app_name) as display_name,
                     app_name,
                     executable_path,
-                    icon_path,
                     icon_data,
                     category,
                     is_ignored,
@@ -543,15 +588,14 @@ impl Database {
                     "display_name":             row.get::<_, String>(1)?,
                     "app_name":                 row.get::<_, String>(2)?,
                     "executable_path":          row.get::<_, String>(3)?,
-                    "icon_path":                row.get::<_, Option<String>>(4)?,
-                    "icon_data":                row.get::<_, Option<String>>(5)?,
-                    "category":                 row.get::<_, String>(6)?,
-                    "is_ignored":               row.get::<_, bool>(7)?,
-                    "daily_limit_minutes":      row.get::<_, Option<i64>>(8)?,
-                    "reminder_interval_minutes": row.get::<_, i64>(9)?,
-                    "soft_lock_enabled":        row.get::<_, bool>(10)?,
-                    "total_seconds":            row.get::<_, i64>(11)?,
-                    "today_seconds":            row.get::<_, i64>(12)?,
+                    "icon_data":                row.get::<_, Option<String>>(4)?,
+                    "category":                 row.get::<_, String>(5)?,
+                    "is_ignored":               row.get::<_, bool>(6)?,
+                    "daily_limit_minutes":      row.get::<_, Option<i64>>(7)?,
+                    "reminder_interval_minutes": row.get::<_, i64>(8)?,
+                    "soft_lock_enabled":        row.get::<_, bool>(9)?,
+                    "total_seconds":            row.get::<_, i64>(10)?,
+                    "today_seconds":            row.get::<_, i64>(11)?,
                 }))
             })?
             .filter_map(|r| r.ok())
@@ -729,11 +773,96 @@ impl Database {
         Ok(())
     }
 
+    /// Create a lock for an app (soft-lock lockout after limit reached and app closed)
+    pub fn create_app_lock(&self, app_id: i64, lock_duration_minutes: i64) -> Result<()> {
+        let expiration = chrono::Local::now()
+            .checked_add_signed(chrono::Duration::minutes(lock_duration_minutes))
+            .ok_or_else(|| anyhow::anyhow!("Failed to calculate lock expiration"))?
+            .format("%Y-%m-%dT%H:%M:%S")
+            .to_string();
+
+        self.conn.execute(
+            "INSERT INTO app_locks (app_id, lock_expiration, reason) VALUES (?1, ?2, 'limit_reached')",
+            params![app_id, expiration],
+        )?;
+        Ok(())
+    }
+
+    //COMING SOON - FEATURE UNDER PROGRESS
+    /// Check if an app currently has an active lock
+    pub fn get_app_lock(&self, app_id: i64) -> Result<Option<(i64, String)>> {
+        let result = self.conn.query_row(
+            "SELECT id, lock_expiration FROM app_locks 
+             WHERE app_id = ?1 AND datetime(lock_expiration) > datetime('now')
+             ORDER BY lock_expiration DESC LIMIT 1",
+            params![app_id],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        );
+
+        match result {
+            Ok((id, expiration)) => Ok(Some((id, expiration))),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Remove a specific lock
+    pub fn remove_app_lock(&self, lock_id: i64) -> Result<()> {
+        self.conn.execute("DELETE FROM app_locks WHERE id = ?1", params![lock_id])?;
+        Ok(())
+    }
+
+    /// Clean up expired locks
+    pub fn cleanup_expired_locks(&self) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM app_locks WHERE datetime(lock_expiration) <= datetime('now')",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Mark that limit was reached today for this app (prevent repeated warnings)
+    pub fn mark_limit_reached_today(&self, app_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps SET limit_reached_today = 1 WHERE id = ?1",
+            params![app_id],
+        )?;
+        Ok(())
+    }
+
+    /// Check if limit was already reached today for this app
+    pub fn is_limit_reached_today(&self, app_id: i64) -> Result<bool> {
+        let reached = self.conn.query_row(
+            "SELECT limit_reached_today FROM apps WHERE id = ?1",
+            params![app_id],
+            |r| r.get::<_, bool>(0),
+        )?;
+        Ok(reached)
+    }
+
+    /// Reset daily limit reached flag (called daily)
+    pub fn reset_daily_limit_flags(&self, today: &str) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps SET limit_reached_today = 0 WHERE is_ignored = 0",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Reset limit reached flag for a specific app (after user grants 5 more minutes)
+    pub fn reset_app_limit_flag(&self, app_id: i64) -> Result<()> {
+        self.conn.execute(
+            "UPDATE apps SET limit_reached_today = 0 WHERE id = ?1",
+            params![app_id],
+        )?;
+        Ok(())
+    }
+
     pub fn get_daily_usage(&self, date: &str) -> Result<Value> {
         let mut stmt = self.conn.prepare(
-            "SELECT COALESCE(a.display_name, a.app_name), a.executable_path, a.category,
-                    SUM(s.duration_seconds) as total,
-                    COUNT(*) as sessions
+            "SELECT COALESCE(a.display_name, a.app_name), a.executable_path, a.category, a.icon_data,
+                     SUM(s.duration_seconds) as total,
+                     COUNT(*) as sessions
              FROM usage_sessions s
              JOIN apps a ON s.app_id = a.id
              WHERE date(s.start_time) = ?1 AND s.was_idle = 0 AND a.is_ignored = 0
@@ -747,8 +876,9 @@ impl Database {
                     "app_name":         row.get::<_, String>(0)?,
                     "executable_path":  row.get::<_, String>(1)?,
                     "category":         row.get::<_, String>(2)?,
-                    "duration_seconds": row.get::<_, i64>(3)?,
-                    "sessions":         row.get::<_, i64>(4)?,
+                    "icon_data":        row.get::<_, Option<String>>(3)?,
+                    "duration_seconds": row.get::<_, i64>(4)?,
+                    "sessions":         row.get::<_, i64>(5)?,
                 }))
             })?
             .filter_map(|r| r.ok())
@@ -784,18 +914,10 @@ impl Database {
             .filter_map(|r| r.ok())
             .collect();
 
-        let productivity_score = if totals.0 > 0 {
-            (totals.2 as f64 / totals.0 as f64 * 100.0).round() as i64
-        } else {
-            0
-        };
-
         Ok(json!({
             "date": date,
             "total_active_seconds": totals.0,
             "total_idle_seconds":   totals.1,
-            "productive_seconds":   totals.2,
-            "productivity_score":   productivity_score,
             "apps":                 apps,
             "categories":           categories,
         }))
@@ -805,8 +927,7 @@ impl Database {
         let mut stmt = self.conn.prepare(
             "SELECT date(s.start_time) as day,
                     SUM(CASE WHEN s.was_idle = 0 THEN s.duration_seconds ELSE 0 END) as active,
-                    SUM(CASE WHEN s.was_idle = 1 THEN s.duration_seconds ELSE 0 END) as idle,
-                    SUM(CASE WHEN s.was_idle = 0 AND a.category IN ('Productive','Development','Study') THEN s.duration_seconds ELSE 0 END) as productive
+                    SUM(CASE WHEN s.was_idle = 1 THEN s.duration_seconds ELSE 0 END) as idle
              FROM usage_sessions s
              JOIN apps a ON s.app_id = a.id
              WHERE date(s.start_time) >= ?1
@@ -820,14 +941,14 @@ impl Database {
                     "date":               row.get::<_, String>(0)?,
                     "active_seconds":     row.get::<_, i64>(1)?,
                     "idle_seconds":       row.get::<_, i64>(2)?,
-                    "productive_seconds": row.get::<_, i64>(3)?,
                 }))
             })?
             .filter_map(|r| r.ok())
             .collect();
 
         let mut app_stmt = self.conn.prepare(
-            "SELECT COALESCE(a.display_name, a.app_name), a.category, SUM(s.duration_seconds) as total
+            "SELECT COALESCE(a.display_name, a.app_name), a.executable_path, a.category, a.icon_data,
+                    SUM(s.duration_seconds) as total
              FROM usage_sessions s
              JOIN apps a ON s.app_id = a.id
              WHERE date(s.start_time) >= ?1
@@ -839,8 +960,11 @@ impl Database {
             .query_map(params![start_date], |row| {
                 Ok(json!({
                     "app_name":         row.get::<_, String>(0)?,
-                    "category":         row.get::<_, String>(1)?,
-                    "duration_seconds": row.get::<_, i64>(2)?,
+                    "executable_path":  row.get::<_, String>(1)?,
+                    "category":         row.get::<_, String>(2)?,
+                    "icon_data":        row.get::<_, Option<String>>(3)?,
+                    "duration_seconds": row.get::<_, i64>(4)?,
+                    "sessions":         0,
                 }))
             })?
             .filter_map(|r| r.ok())
@@ -878,13 +1002,6 @@ impl Database {
     }
 
     pub fn get_hourly_heatmap(&self, date: &str) -> Result<Value> {
-        // let mut stmt = self.conn.prepare(
-        //     "SELECT strftime('%H', s.start_time) as hour, SUM(s.duration_seconds) as total
-        //      FROM usage_sessions s
-        //      JOIN apps a ON s.app_id = a.id
-        //      WHERE date(s.start_time) = ?1 AND s.was_idle = 0 AND a.is_ignored = 0
-        //      GROUP BY hour ORDER BY hour",
-        // )?;
         let mut stmt = self.conn.prepare(
             "SELECT s.start_time, s.end_time
         FROM usage_sessions s
@@ -893,22 +1010,6 @@ impl Database {
         AND s.was_idle = 0
         AND a.is_ignored = 0",
         )?;
-        // let hours_raw: Vec<(i32, i64)> = stmt
-        //     .query_map(params![date], |row| {
-        //         Ok((
-        //             row.get::<_, String>(0)?.parse::<i32>().unwrap_or(0),
-        //             row.get::<_, i64>(1)?,
-        //         ))
-        //     })?
-        //     .filter_map(|r| r.ok())
-        //     .collect();
-
-        // let mut heatmap = vec![0i64; 24];
-        // for (h, secs) in hours_raw {
-        //     if (0..24).contains(&(h as usize)) {
-        // //         heatmap[h as usize] = secs;
-        //     }
-        // }
         use chrono::{NaiveDateTime, Timelike};
 
         let rows: Vec<(String, String)> = stmt
@@ -954,8 +1055,8 @@ impl Database {
 
     pub fn get_timeline(&self, date: &str) -> Result<Value> {
         let mut stmt = self.conn.prepare(
-            "SELECT COALESCE(a.display_name, a.app_name), a.category, s.window_title,
-                    s.start_time, s.end_time, s.duration_seconds, s.was_idle
+            "SELECT COALESCE(a.display_name, a.app_name), a.executable_path, a.category, a.icon_data,
+                    s.window_title, s.start_time, s.end_time, s.duration_seconds, s.was_idle
              FROM usage_sessions s
              JOIN apps a ON s.app_id = a.id
              WHERE date(s.start_time) = ?1 AND a.is_ignored = 0
@@ -965,12 +1066,14 @@ impl Database {
             .query_map(params![date], |row| {
                 Ok(json!({
                     "app_name":         row.get::<_, String>(0)?,
-                    "category":         row.get::<_, String>(1)?,
-                    "window_title":     row.get::<_, Option<String>>(2)?,
-                    "start_time":       row.get::<_, String>(3)?,
-                    "end_time":         row.get::<_, Option<String>>(4)?,
-                    "duration_seconds": row.get::<_, i64>(5)?,
-                    "was_idle":         row.get::<_, bool>(6)?,
+                    "executable_path":  row.get::<_, String>(1)?,
+                    "category":         row.get::<_, String>(2)?,
+                    "icon_data":        row.get::<_, Option<String>>(3)?,
+                    "window_title":     row.get::<_, Option<String>>(4)?,
+                    "start_time":       row.get::<_, String>(5)?,
+                    "end_time":         row.get::<_, Option<String>>(6)?,
+                    "duration_seconds": row.get::<_, i64>(7)?,
+                    "was_idle":         row.get::<_, bool>(8)?,
                 }))
             })?
             .filter_map(|r| r.ok())
@@ -983,7 +1086,7 @@ impl Database {
     pub fn get_settings(&self) -> Result<Value> {
         let row = self.conn.query_row(
             "SELECT polling_interval_ms, idle_threshold_minutes, launch_on_startup, start_minimized,
-                    theme, database_path, notification_enabled, daily_goal_minutes
+                    notification_enabled, daily_goal_minutes
              FROM settings WHERE id = 1",
             [],
             |row| {
@@ -991,11 +1094,9 @@ impl Database {
                     "polling_interval_ms":    row.get::<_, i64>(0)?,
                     "idle_threshold_minutes": row.get::<_, i64>(1)?,
                     "launch_on_startup":      row.get::<_, bool>(2)?,
-                    "start_minimized": row.get::<_, bool>(3)?,
-                    "theme":                  row.get::<_, String>(4)?,
-                    "database_path":          row.get::<_, String>(5)?,
-                    "notification_enabled":   row.get::<_, bool>(6)?,
-                    "daily_goal_minutes":     row.get::<_, i64>(7)?,
+                    "start_minimized":        row.get::<_, bool>(3)?,
+                    "notification_enabled":   row.get::<_, bool>(4)?,
+                    "daily_goal_minutes":     row.get::<_, i64>(5)?,
                 }))
             },
         )?;
@@ -1027,12 +1128,6 @@ impl Database {
                 params![v.as_bool().unwrap_or(false)],
             )?;
         }
-        if let Some(v) = settings.get("theme") {
-            self.conn.execute(
-                "UPDATE settings SET theme = ?1 WHERE id = 1",
-                params![v.as_str().unwrap_or("dark")],
-            )?;
-        }
         if let Some(v) = settings.get("notification_enabled") {
             self.conn.execute(
                 "UPDATE settings SET notification_enabled = ?1 WHERE id = 1",
@@ -1043,12 +1138,6 @@ impl Database {
             self.conn.execute(
                 "UPDATE settings SET daily_goal_minutes = ?1 WHERE id = 1",
                 params![v.as_i64().unwrap_or(480)],
-            )?;
-        }
-        if let Some(v) = settings.get("database_path") {
-            self.conn.execute(
-                "UPDATE settings SET database_path = ?1 WHERE id = 1",
-                params![v.as_str().unwrap_or("")],
             )?;
         }
         Ok(())
@@ -1139,12 +1228,6 @@ impl Database {
     pub fn reset_tracking_data(&self) -> Result<()> {
         self.conn.execute("DELETE FROM usage_sessions", [])?;
         self.conn.execute("DELETE FROM apps", [])?;
-
-        let _ = self.conn.execute("DELETE FROM daily_stats", []);
-        let _ = self.conn.execute("DELETE FROM limit_notifications", []);
-        let _ = self.conn.execute("DELETE FROM reminder_tracking", []);
-        let _ = self.conn.execute("DELETE FROM soft_lock_tracking", []);
-
         Ok(())
     }
 
@@ -1158,7 +1241,8 @@ impl Database {
 
         Ok(())
     }
-}
+    Ok(())
+    }
 
 // ─── Auto-categorization heuristics ──────────────────────────────────────────
 
@@ -1321,7 +1405,7 @@ fn auto_ignore_app(app_name: &str, exe_path: &str) -> bool {
         ],
     ) || path_lower.contains("\\windows\\systemapps\\")
 }
-#[allow(dead_code)]
+
 fn get_file_description(exe_path: &str) -> Option<String> {
     let wide_path: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
 
@@ -1338,7 +1422,7 @@ fn get_file_description(exe_path: &str) -> Option<String> {
 
         if !GetFileVersionInfoW(
             PCWSTR(wide_path.as_ptr()),
-            0,
+            Some(0),
             size,
             buffer.as_mut_ptr() as *mut _,
         )
@@ -1385,37 +1469,307 @@ fn get_file_description(exe_path: &str) -> Option<String> {
     }
 }
 
-#[allow(dead_code)]
 fn extract_icon_base64(exe_path: &str) -> Option<String> {
-    let wide: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
+    if seems_uwp_package_id(exe_path) {
+        extract_app_user_model_id_icon_base64(exe_path)
+    } else {
+        extract_executable_icon_base64(exe_path)
+    }
+}
 
-    let mut large_icon = HICON::default();
+fn seems_uwp_package_id(exe_path: &str) -> bool {
+    exe_path.contains('!') && !exe_path.contains('\\') && !exe_path.contains('/')
+}
 
-    let count = unsafe { ExtractIconExW(PCWSTR(wide.as_ptr()), 0, Some(&mut large_icon), None, 1) };
+fn extract_app_user_model_id_icon_base64(app_user_model_id: &str) -> Option<String> {
+    const ICON_SIZE: i32 = 64;
+    let shell_path = format!("shell:AppsFolder\\{}", app_user_model_id);
+    let shell_path_w: Vec<u16> = shell_path.encode_utf16().chain(std::iter::once(0)).collect();
 
-    if count == 0 {
+    unsafe {
+        let shell_item: IShellItem = SHCreateItemFromParsingName(PCWSTR(shell_path_w.as_ptr()), None).ok()?;
+        let image_factory: IShellItemImageFactory = shell_item.cast().ok()?;
+
+        let bitmap = image_factory.GetImage(
+            windows::Win32::Foundation::SIZE {
+                cx: ICON_SIZE,
+                cy: ICON_SIZE,
+            },
+            SIIGBF_RESIZETOFIT,
+        )
+        .ok()?;
+
+        let result = encode_hbitmap_as_base64_png(bitmap);
+        let _ = DeleteObject(bitmap.into());
+        result
+    }
+}
+
+fn extract_executable_icon_base64(exe_path: &str) -> Option<String> {
+    const ICON_SIZE: i32 = 64;
+
+    let mut icon = HICON::default();
+    let wide: Vec<u16> = exe_path.encode_utf16().collect();
+
+    if wide.len() < 260 {
+        let mut path_buffer = [0u16; 260];
+        path_buffer[..wide.len()].copy_from_slice(&wide);
+        let mut icons = [HICON::default(); 1];
+        let count = unsafe {
+            PrivateExtractIconsW(
+                &path_buffer,
+                0,
+                ICON_SIZE,
+                ICON_SIZE,
+                Some(&mut icons),
+                None,
+                0,
+            )
+        };
+        if count > 0 && count != u32::MAX && !icons[0].is_invalid() {
+            icon = icons[0];
+        }
+    }
+
+    // Retain ExtractIconExW as the compatibility fallback for files that do not
+    // expose a requested high-resolution icon through PrivateExtractIconsW.
+    if icon.is_invalid() {
+        let null_terminated: Vec<u16> = wide.iter().copied().chain(std::iter::once(0)).collect();
+        let count = unsafe {
+            ExtractIconExW(
+                PCWSTR(null_terminated.as_ptr()),
+                0,
+                Some(&mut icon),
+                None,
+                1,
+            )
+        };
+        if count == 0 || icon.is_invalid() {
+            return None;
+        }
+    }
+
+    let result = unsafe { encode_hicon_as_base64_png(icon) };
+    unsafe {
+        let _ = DestroyIcon(icon);
+    }
+    result
+}
+
+unsafe fn encode_hicon_as_base64_png(icon: HICON) -> Option<String> {
+    const BYTES_PER_PIXEL: usize = 4;
+
+    let mut icon_info = ICONINFO::default();
+    GetIconInfo(icon, &mut icon_info).ok()?;
+
+    let dc = CreateCompatibleDC(None);
+    if dc.is_invalid() {
+        let _ = DeleteObject(icon_info.hbmColor.into());
+        let _ = DeleteObject(icon_info.hbmMask.into());
         return None;
     }
 
-    // 1x1 transparent PNG
+    let result = (|| {
+        if icon_info.hbmColor.is_invalid() {
+            return None;
+        }
+
+        let mut bitmap = BITMAP::default();
+        if GetObjectW(
+            icon_info.hbmColor.into(),
+            std::mem::size_of::<BITMAP>() as i32,
+            Some((&mut bitmap as *mut BITMAP).cast()),
+        ) == 0
+        {
+            return None;
+        }
+
+        let width = bitmap.bmWidth;
+        let height = bitmap.bmHeight;
+        if width <= 0 || height <= 0 {
+            return None;
+        }
+
+        let mut bitmap_info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                // Negative height requests top-down rows.
+                biHeight: -height,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let byte_len = width as usize * height as usize * BYTES_PER_PIXEL;
+        let mut bgra = vec![0u8; byte_len];
+        if GetDIBits(
+            dc,
+            icon_info.hbmColor,
+            0,
+            height as u32,
+            Some(bgra.as_mut_ptr().cast()),
+            &mut bitmap_info,
+            DIB_RGB_COLORS,
+        ) == 0
+        {
+            return None;
+        }
+
+        let has_alpha = bgra
+            .chunks_exact(BYTES_PER_PIXEL)
+            .any(|pixel| pixel[3] != 0);
+        let mask = if has_alpha {
+            None
+        } else {
+            read_icon_mask(dc, icon_info.hbmMask, width, height)
+        };
+
+        let mut rgba = Vec::with_capacity(byte_len);
+        for (index, pixel) in bgra.chunks_exact(BYTES_PER_PIXEL).enumerate() {
+            let alpha = if has_alpha {
+                pixel[3]
+            } else {
+                mask.as_ref().map(|values| values[index]).unwrap_or(u8::MAX)
+            };
+            rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], alpha]);
+        }
+
+        let image = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width as u32, height as u32, rgba)?;
+        let mut png = Cursor::new(Vec::new());
+        image.write_to(&mut png, ImageFormat::Png).ok()?;
+        Some(general_purpose::STANDARD.encode(png.into_inner()))
+    })();
+
+    let _ = DeleteDC(dc);
+    let _ = DeleteObject(icon_info.hbmColor.into());
+    let _ = DeleteObject(icon_info.hbmMask.into());
+    result
+}
+
+unsafe fn encode_hbitmap_as_base64_png(bitmap: HBITMAP) -> Option<String> {
+    const BYTES_PER_PIXEL: usize = 4;
+
+    let dc = CreateCompatibleDC(None);
+    if dc.is_invalid() {
+        let _ = DeleteObject(bitmap.into());
+        return None;
+    }
+
+    let result = (|| {
+        let mut bmp = BITMAP::default();
+        if GetObjectW(
+            bitmap.into(),
+            std::mem::size_of::<BITMAP>() as i32,
+            Some((&mut bmp as *mut BITMAP).cast()),
+        ) == 0
+        {
+            return None;
+        }
+
+        let width = bmp.bmWidth;
+        let height = bmp.bmHeight;
+        if width <= 0 || height <= 0 {
+            return None;
+        }
+
+        let mut bitmap_info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                // Negative height requests top-down rows.
+                biHeight: -height,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let byte_len = width as usize * height as usize * BYTES_PER_PIXEL;
+        let mut bgra = vec![0u8; byte_len];
+        if GetDIBits(
+            dc,
+            bitmap,
+            0,
+            height as u32,
+            Some(bgra.as_mut_ptr().cast()),
+            &mut bitmap_info,
+            DIB_RGB_COLORS,
+        ) == 0
+        {
+            return None;
+        }
+
+        let mut rgba = Vec::with_capacity(byte_len);
+        for pixel in bgra.chunks_exact(BYTES_PER_PIXEL) {
+            rgba.extend_from_slice(&[pixel[2], pixel[1], pixel[0], pixel[3]]);
+        }
+
+        let image = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width as u32, height as u32, rgba)?;
+        let mut png = Cursor::new(Vec::new());
+        image.write_to(&mut png, ImageFormat::Png).ok()?;
+        Some(general_purpose::STANDARD.encode(png.into_inner()))
+    })();
+
+    let _ = DeleteDC(dc);
+    let _ = DeleteObject(bitmap.into());
+    result
+}
+
+unsafe fn read_icon_mask(
+    dc: windows::Win32::Graphics::Gdi::HDC,
+    mask_bitmap: windows::Win32::Graphics::Gdi::HBITMAP,
+    width: i32,
+    height: i32,
+) -> Option<Vec<u8>> {
+    if mask_bitmap.is_invalid() {
+        return None;
+    }
+
+    let mut mask_info = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: width,
+            biHeight: -height,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut mask_pixels = vec![0u8; width as usize * height as usize * 4];
+    if GetDIBits(
+        dc,
+        mask_bitmap,
+        0,
+        height as u32,
+        Some(mask_pixels.as_mut_ptr().cast()),
+        &mut mask_info,
+        DIB_RGB_COLORS,
+    ) == 0
+    {
+        return None;
+    }
+
     Some(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0nQAAAAASUVORK5CYII="
-        .to_string(),
-)
+        mask_pixels
+            .chunks_exact(4)
+            .map(|pixel| {
+                let transparent = pixel[0] > 127 && pixel[1] > 127 && pixel[2] > 127;
+                if transparent {
+                    0
+                } else {
+                    u8::MAX
+                }
+            })
+            .collect(),
+    )
 }
 
-#[allow(dead_code)]
-fn test_icon_extract(exe_path: &str) {
-    let wide: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
-
-    let mut large_icon = HICON::default();
-
-    let count = unsafe { ExtractIconExW(PCWSTR(wide.as_ptr()), 0, Some(&mut large_icon), None, 1) };
-
-    println!("ICON COUNT = {}", count);
-}
-
-use std::collections::HashMap;
 use std::fs;
 
 fn get_friendly_name(executable_path: &str) -> Option<String> {
@@ -1441,7 +1795,8 @@ fn get_friendly_name(executable_path: &str) -> Option<String> {
         }
     }
 
-    None
+    // None
+    get_file_description(executable_path)
 }
 
 fn scan_start_menu_folder(folder: &str, exe_name: &str) -> Option<String> {
