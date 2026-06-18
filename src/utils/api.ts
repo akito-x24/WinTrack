@@ -35,9 +35,9 @@ export const api = {
 
   closeProcess: (process_name: string) => call<void>("close_process", { processName: process_name }),
   
-  //COMING SOON - FEATURE UNDER PROGRESS
-  // Grant 5 more minutes to an app that reached its limit
-  grantAppMoreTime: (app_id: number) => call<void>("grant_app_more_time", { appId: app_id }),
+  // //COMING SOON - FEATURE UNDER PROGRESS
+  // // Grant 5 more minutes to an app that reached its limit
+  // grantAppMoreTime: (app_id: number) => call<void>("grant_app_more_time", { appId: app_id }),
 
   resetTrackingData: () => call<void>("reset_tracking_data"),
   factoryReset: () => call<void>("factory_reset"),

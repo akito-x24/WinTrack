@@ -262,7 +262,7 @@ async fn factory_reset(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<
     state.db.factory_reset().map_err(|e| e.to_string())
 }
 
-//COMING SOON - FEATURE UNDER PROGRESS
+// //COMING SOON - FEATURE UNDER PROGRESS
 // #[tauri::command]
 // async fn grant_app_more_time(
 //     state: tauri::State<'_, Arc<Mutex<AppState>>>,

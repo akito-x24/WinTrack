@@ -384,8 +384,8 @@ impl Database {
     //         log::info!("Migration: added apps.limit_reached_today");
     //     }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn upsert_app(&self, app_name: &str, executable_path: &str) -> Result<(i64, bool)> {
         let category = auto_categorize(app_name, executable_path);
@@ -848,15 +848,17 @@ impl Database {
         )?;
         Ok(())
     }
+    
 
-    /// Reset limit reached flag for a specific app (after user grants 5 more minutes)
-    pub fn reset_app_limit_flag(&self, app_id: i64) -> Result<()> {
-        self.conn.execute(
-            "UPDATE apps SET limit_reached_today = 0 WHERE id = ?1",
-            params![app_id],
-        )?;
-        Ok(())
-    }
+    //COMING SOON - FEATURE UNDER PROGRESS
+    // /// Reset limit reached flag for a specific app (after user grants 5 more minutes)
+    // pub fn reset_app_limit_flag(&self, app_id: i64) -> Result<()> {
+    //     self.conn.execute(
+    //         "UPDATE apps SET limit_reached_today = 0 WHERE id = ?1",
+    //         params![app_id],
+    //     )?;
+    //     Ok(())
+    // }
 
     pub fn get_daily_usage(&self, date: &str) -> Result<Value> {
         let mut stmt = self.conn.prepare(
@@ -1241,8 +1243,7 @@ impl Database {
 
         Ok(())
     }
-    Ok(())
-    }
+}
 
 // ─── Auto-categorization heuristics ──────────────────────────────────────────
 
