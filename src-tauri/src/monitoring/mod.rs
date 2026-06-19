@@ -1,4 +1,6 @@
 use crate::services::AppState;
+#[cfg(target_os = "windows")]
+use crate::browser_pwa::{resolve_browser_pwa, BrowserKind};
 use chrono::Local;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -30,6 +32,7 @@ pub struct ForegroundApp {
     pub app_name: String,
     pub executable_path: String,
     pub window_title: String,
+    pub process_name: String,
 }
 
 #[cfg(target_os = "windows")]
@@ -75,6 +78,23 @@ pub fn get_foreground_app() -> Option<ForegroundApp> {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| executable_path.clone());
 
+        if let Some(browser) = BrowserKind::from_process_name(&exe_name) {
+            let app_user_model_id = get_window_app_user_model_id(hwnd);
+            if let Some(pwa) = resolve_browser_pwa(
+                browser,
+                &executable_path,
+                app_user_model_id.as_deref(),
+                &window_title,
+            ) {
+                return Some(ForegroundApp {
+                    app_name: pwa.display_name,
+                    executable_path: pwa.stable_identifier,
+                    window_title,
+                    process_name: exe_name,
+                });
+            }
+        }
+
         let (app_name, executable_path) = if is_uwp_host_process(&exe_name) {
             resolve_uwp_foreground_app(hwnd, &window_title)
                 .unwrap_or((exe_name.clone(), executable_path.clone()))
@@ -86,6 +106,7 @@ pub fn get_foreground_app() -> Option<ForegroundApp> {
             app_name,
             executable_path,
             window_title,
+            process_name: exe_name,
         })
     }
 }
@@ -104,6 +125,22 @@ fn resolve_uwp_foreground_app(hwnd: windows::Win32::Foundation::HWND, window_tit
     // ApplicationFrameHost.exe or RuntimeBroker.exe. The window itself carries
     // a package identity via Shell properties, which allows us to map the
     // foreground window back to the real app.
+    let app_user_model_id = get_window_app_user_model_id(hwnd)?;
+    if app_user_model_id.is_empty() {
+        return None;
+    }
+
+    let app_name = if !window_title.trim().is_empty() {
+        window_title.to_string()
+    } else {
+        app_user_model_id.clone()
+    };
+
+    Some((app_name, app_user_model_id))
+}
+
+#[cfg(target_os = "windows")]
+fn get_window_app_user_model_id(hwnd: windows::Win32::Foundation::HWND) -> Option<String> {
     unsafe {
         let property_store: IPropertyStore = SHGetPropertyStoreForWindow(hwnd).ok()?;
         let mut app_user_model_key: PROPERTYKEY = std::mem::zeroed();
@@ -119,18 +156,12 @@ fn resolve_uwp_foreground_app(hwnd: windows::Win32::Foundation::HWND, window_tit
         let mut buffer = [0u16; 512];
         PropVariantToString(&propvar, &mut buffer).ok()?;
         let len = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
-        let app_user_model_id = String::from_utf16_lossy(&buffer[..len]);
-        if app_user_model_id.is_empty() {
-            return None;
-        }
-
-        let app_name = if !window_title.trim().is_empty() {
-            window_title.to_string()
+        let value = String::from_utf16_lossy(&buffer[..len]);
+        if value.trim().is_empty() {
+            None
         } else {
-            app_user_model_id.clone()
-        };
-
-        Some((app_name, app_user_model_id))
+            Some(value)
+        }
     }
 }
 
@@ -140,6 +171,7 @@ pub fn get_foreground_app() -> Option<ForegroundApp> {
         app_name: "wintrack-dev".to_string(),
         executable_path: "/usr/bin/wintrack-dev".to_string(),
         window_title: "WinTrack Development".to_string(),
+        process_name: "wintrack-dev".to_string(),
     })
 }
 
@@ -373,7 +405,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                                             let url = format!(
                                                                 "/?softlock=1&app={}&process={}",
                                                                 urlencoding::encode(&display_name),
-                                                                urlencoding::encode(&app.app_name)
+                                                                urlencoding::encode(&app.process_name)
                                                             );
 
                                                             let _ = WebviewWindowBuilder::new(

@@ -7,6 +7,7 @@ use tauri::{
 use tauri_plugin_autostart::MacosLauncher;
 
 mod database;
+mod browser_pwa;
 mod export;
 mod monitoring;
 mod services;

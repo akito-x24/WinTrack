@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use crate::browser_pwa;
 use chrono::Local;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
@@ -1471,7 +1472,16 @@ fn get_file_description(exe_path: &str) -> Option<String> {
 }
 
 fn extract_icon_base64(exe_path: &str) -> Option<String> {
-    if seems_uwp_package_id(exe_path) {
+    if browser_pwa::is_pwa_identifier(exe_path) {
+        if let Some(icon_path) = browser_pwa::icon_path_for_identifier(exe_path) {
+            browser_pwa::encode_png_icon(&icon_path)
+                .or_else(|| extract_executable_icon_base64(&icon_path.to_string_lossy()))
+        } else if let Some(browser_exe) = browser_pwa::browser_executable_for_identifier(exe_path) {
+            extract_executable_icon_base64(&browser_exe)
+        } else {
+            None
+        }
+    } else if seems_uwp_package_id(exe_path) {
         extract_app_user_model_id_icon_base64(exe_path)
     } else {
         extract_executable_icon_base64(exe_path)
@@ -1774,6 +1784,10 @@ unsafe fn read_icon_mask(
 use std::fs;
 
 fn get_friendly_name(executable_path: &str) -> Option<String> {
+    if browser_pwa::is_pwa_identifier(executable_path) {
+        return browser_pwa::display_name_for_identifier(executable_path);
+    }
+
     let exe_name = Path::new(executable_path)
         .file_name()?
         .to_string_lossy()

@@ -1,7 +1,6 @@
 import { useStore } from "../store";
 import {
   StatCard,
-  AppIcon,
   AppRow,
   SectionHeader,
   EmptyState,
@@ -11,7 +10,6 @@ import CategoryPieChart from "../components/charts/CategoryPieChart";
 import WeeklyBarChart from "../components/charts/WeeklyBarChart";
 import HourlyHeatmap from "../components/charts/HourlyHeatmap";
 import { formatDuration, todayString } from "../utils/helpers";
-import type { MonthlyStats } from "../types";
 
 export default function Dashboard() {
   const { todayStats, weeklyStats, average30Days, loading } = useStore();
@@ -55,15 +53,6 @@ export default function Dashboard() {
               : "No usage"
           }
           accent="#06b6d4"
-          icon={
-            stats?.apps?.[0] ? (
-              <AppIcon
-                name={stats.apps[0].app_name}
-                iconData={stats.apps[0].icon_data}
-                className="w-7 h-7"
-              />
-            ) : undefined
-          }
         />
       </div>
 
