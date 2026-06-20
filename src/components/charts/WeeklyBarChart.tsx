@@ -36,7 +36,7 @@ export default function WeeklyBarChart({ data }: Props) {
               />
 
               {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-fp-card border border-fp-border rounded-lg px-3 py-2 text-xs text-fp-text opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none shadow-lg">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-wt-card border border-wt-border rounded-lg px-3 py-2 text-xs text-wt-text opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none shadow-lg">
                 <p className="font-medium mb-1">{dayLabel(d.date)}{isToday ? " · Today" : ""}</p>
                 <p style={{ color: "#0f5cc8" }}>Total: {formatDuration(d.active_seconds)}</p>
               </div>
@@ -49,7 +49,7 @@ export default function WeeklyBarChart({ data }: Props) {
       <div className="flex gap-1">
         {data.map((d) => (
           <div key={d.date} className="flex-1 text-center">
-            <span className={`text-[11px] ${d.date === today ? "text-fp-accent font-medium" : "text-fp-muted"}`}>
+            <span className={`text-[11px] ${d.date === today ? "text-wt-accent font-medium" : "text-wt-muted"}`}>
               {dayLabel(d.date)}
             </span>
           </div>

@@ -15,7 +15,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, sub, accent, icon }: StatCardProps) {
   return (
-    <div className="fp-card flex flex-col gap-2 relative overflow-hidden">
+    <div className="wt-card flex flex-col gap-2 relative overflow-hidden">
       {accent && (
         <div
           className="absolute top-0 left-0 right-0 h-0.5"
@@ -23,11 +23,11 @@ export function StatCard({ label, value, sub, accent, icon }: StatCardProps) {
         />
       )}
       <div className="flex items-start justify-between">
-        <span className="fp-label">{label}</span>
-        {icon && <span className="text-fp-muted">{icon}</span>}
+        <span className="wt-label">{label}</span>
+        {icon && <span className="text-wt-muted">{icon}</span>}
       </div>
-      <div className="fp-value">{value}</div>
-      {sub && <div className="text-xs text-fp-muted">{sub}</div>}
+      <div className="wt-value">{value}</div>
+      {sub && <div className="text-xs text-wt-muted">{sub}</div>}
     </div>
   );
 }
@@ -92,7 +92,7 @@ export function AppRow({
   return (
     <div className="flex items-center gap-3 py-2.5 group">
       {rank && (
-        <span className="text-xs text-fp-muted w-4 text-right shrink-0">{rank}</span>
+        <span className="text-xs text-wt-muted w-4 text-right shrink-0">{rank}</span>
       )}
 
       {/* Icon */}
@@ -103,10 +103,10 @@ export function AppRow({
       {/* Name + bar */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-sm text-fp-text truncate">{name.replace(/\.exe$/i, "")}</span>
-          <span className="text-xs text-fp-muted ml-2 shrink-0">{formatDuration(durationSeconds)}</span>
+          <span className="text-sm text-wt-text truncate">{name.replace(/\.exe$/i, "")}</span>
+          <span className="text-xs text-wt-muted ml-2 shrink-0">{formatDuration(durationSeconds)}</span>
         </div>
-        <div className="h-1 bg-fp-border rounded-full overflow-hidden">
+        <div className="h-1 bg-wt-border rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{ width: `${pct}%`, background: color }}
@@ -147,7 +147,7 @@ export function CategoryBadge({ category, size = "xs" }: CategoryBadgeProps) {
 export function SectionHeader({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-4">
-      <h2 className="text-sm font-semibold text-fp-text">{title}</h2>
+      <h2 className="text-sm font-semibold text-wt-text">{title}</h2>
       {action}
     </div>
   );
@@ -157,8 +157,8 @@ export function SectionHeader({ title, action }: { title: string; action?: React
 
 export function EmptyState({ message = "No data available yet" }: { message?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 text-fp-muted gap-3">
-      <div className="w-12 h-12 rounded-xl bg-fp-border flex items-center justify-center text-xl">◌</div>
+    <div className="flex flex-col items-center justify-center py-16 text-wt-muted gap-3">
+      <div className="w-12 h-12 rounded-xl bg-wt-border flex items-center justify-center text-xl">◌</div>
       <p className="text-sm">{message}</p>
     </div>
   );
@@ -169,7 +169,7 @@ export function EmptyState({ message = "No data available yet" }: { message?: st
 export function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center py-16">
-      <div className="w-6 h-6 border-2 border-fp-border border-t-fp-accent rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 border-wt-border border-t-wt-accent rounded-full animate-spin" />
     </div>
   );
 }
@@ -187,14 +187,14 @@ export function TimeBar({ label, seconds, maxSeconds, color = "#3b82f6" }: TimeB
   const pct = percentOf(seconds, maxSeconds);
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs text-fp-muted w-20 shrink-0 truncate">{label}</span>
-      <div className="flex-1 h-2 bg-fp-border rounded-full overflow-hidden">
+      <span className="text-xs text-wt-muted w-20 shrink-0 truncate">{label}</span>
+      <div className="flex-1 h-2 bg-wt-border rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: color }}
         />
       </div>
-      <span className="text-xs text-fp-muted w-12 text-right shrink-0">{formatDuration(seconds)}</span>
+      <span className="text-xs text-wt-muted w-12 text-right shrink-0">{formatDuration(seconds)}</span>
     </div>
   );
 }

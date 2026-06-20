@@ -58,10 +58,10 @@ export default function Dashboard() {
 
       {/* Main content grid */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 fp-card">
+        <div className="col-span-2 wt-card">
           <SectionHeader title="Top Apps Today" />
           {stats?.apps && stats.apps.length > 0 ? (
-            <div className="divide-y divide-fp-border/50">
+            <div className="divide-y divide-wt-border/50">
               {stats.apps.slice(0, 8).map((app, i) => (
                 <AppRow
                   key={app.executable_path}
@@ -80,7 +80,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="fp-card">
+        <div className="wt-card">
           <SectionHeader title="By Category" />
           {stats?.categories ? (
             <CategoryPieChart categories={stats.categories} apps={stats.apps}/>
@@ -91,13 +91,13 @@ export default function Dashboard() {
       </div>
 
       {/* Hourly heatmap */}
-      <div className="fp-card">
+      <div className="wt-card">
         <SectionHeader title="Hourly Activity" />
         <HourlyHeatmap date={today} />
       </div>
 
       {/* Weekly trend */}
-      <div className="fp-card">
+      <div className="wt-card">
         <SectionHeader title="This Week" />
         <WeeklyBarChart
           data={Array.from({ length: 7 }, (_, i) => {

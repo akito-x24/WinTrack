@@ -23,21 +23,18 @@ export default function Sidebar() {
   const { view, setView, isTrackingPaused, toggleTracking } = useStore();
 
   return (
-    <aside className="w-[220px] min-w-[220px] flex flex-col bg-fp-surface border-r border-fp-border">
+    <aside className="w-[220px] min-w-[220px] flex flex-col bg-wt-surface border-r border-wt-border">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-fp-border">
+      <div className="px-5 py-5 border-b border-wt-border">
         <div className="flex items-center gap-3">
-          {/* <div className="w-8 h-8 rounded-lg bg-fp-accent flex items-center justify-center">
-            <span className="text-white text-sm font-bold"></span>
-          </div> */}
           <img
             src={logo}
             alt="WinTrack"
             className="w-8 h-8 rounded-lg"
           />
           <div>
-            <div className="text-sm font-semibold text-fp-text">WinTrack</div>
-            <div className="text-[10px] text-fp-muted">v2.4.0</div>
+            <div className="text-sm font-semibold text-wt-text">WinTrack</div>
+            <div className="text-[10px] text-wt-muted">v2.4.0</div>
           </div>
         </div>
       </div>
@@ -51,8 +48,8 @@ export default function Sidebar() {
             className={clsx(
               "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 text-left",
               view === item.id
-                ? "bg-fp-accent/15 text-fp-accent font-medium"
-                : "text-fp-muted hover:text-fp-text hover:bg-fp-border/60"
+                ? "bg-wt-accent/15 text-wt-accent font-medium"
+                : "text-wt-muted hover:text-wt-text hover:bg-wt-border/60"
             )}
           >
             <span className="text-base leading-none">{item.icon}</span>
@@ -68,13 +65,13 @@ export default function Sidebar() {
           className={clsx(
             "w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all",
             isTrackingPaused
-              ? "bg-fp-green/15 text-fp-green hover:bg-fp-green/25"
-              : "bg-fp-amber/15 text-fp-amber hover:bg-fp-amber/25"
+              ? "bg-wt-green/15 text-wt-green hover:bg-wt-green/25"
+              : "bg-wt-amber/15 text-wt-amber hover:bg-wt-amber/25"
           )}
         >
           <span className={clsx(
             "w-1.5 h-1.5 rounded-full",
-            isTrackingPaused ? "bg-fp-amber" : "bg-fp-green animate-pulse"
+            isTrackingPaused ? "bg-wt-amber" : "bg-wt-green animate-pulse"
           )} />
           {isTrackingPaused ? "Resume Tracking" : "Pause Tracking"}
         </button>

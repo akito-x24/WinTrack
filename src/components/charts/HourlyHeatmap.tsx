@@ -40,7 +40,7 @@ export default function HourlyHeatmap({ date }: Props) {
             }}
           >
             {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-fp-card border border-fp-border rounded px-2 py-1 text-xs text-fp-text opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-wt-card border border-wt-border rounded px-2 py-1 text-xs text-wt-text opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none">
               {hourLabels[i]} · {formatDuration(secs)}
             </div>
           </div>
@@ -52,7 +52,7 @@ export default function HourlyHeatmap({ date }: Props) {
         {Array.from({ length: 24 }, (_, i) => (
           <div key={i} className="flex-1 min-w-0 text-center overflow-hidden">
             {showLabel.has(i) ? (
-              <span className="text-[9px] text-fp-muted leading-none">{hourLabels[i]}</span>
+              <span className="text-[9px] text-wt-muted leading-none">{hourLabels[i]}</span>
             ) : null}
           </div>
         ))}

@@ -5,13 +5,20 @@ import { sendNotification } from "@tauri-apps/plugin-notification";
 import type {
   DailyStats, WeeklyStats, MonthlyStats, HourlyHeatmap,
   Timeline, Settings, CurrentSession, App,
-  AppUsage, CategoryUsage
 } from "../types";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
-async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!isTauri()) return getMockData(cmd, args) as T;
+async function call<T>(
+  cmd: string,
+  args?: Record<string, unknown>
+): Promise<T> {
+  if (!isTauri()) {
+    throw new Error(
+      "WinTrack must be run through Tauri. Use 'npm run tauri dev'."
+    );
+  }
+
   return invoke<T>(cmd, args);
 }
 
@@ -34,10 +41,9 @@ export const api = {
   updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", { appId: app_id, limitMinutes: limit_minutes }),
 
   closeProcess: (process_name: string) => call<void>("close_process", { processName: process_name }),
-  
-  // //COMING SOON - FEATURE UNDER PROGRESS
-  // // Grant 5 more minutes to an app that reached its limit
-  // grantAppMoreTime: (app_id: number) => call<void>("grant_app_more_time", { appId: app_id }),
+  grantAppMoreTime: (app_id: number) => call<void>("grant_app_more_time", { appId: app_id }),
+  finishSoftLockWarning: (app_id: number) => call<void>("finish_soft_lock_warning", { appId: app_id }),
+  getSoftLockAppDetails: (app_id: number) => call<{ display_name: string; icon_data?: string | null }>("get_soft_lock_app_details", { appId: app_id }),
 
   resetTrackingData: () => call<void>("reset_tracking_data"),
   factoryReset: () => call<void>("factory_reset"),
@@ -107,147 +113,3 @@ export const api = {
     }
   },
 };
-
-
-// ─── Mock data for browser dev ───────────────────────────────────────────────
-
-const _initialMockApps: AppUsage[] = [
-  { app_name: "VS Code", executable_path: "C:\\VSCode\\Code.exe", category: "Development", duration_seconds: 7200, sessions: 3 },
-  { app_name: "Google Chrome", executable_path: "C:\\Chrome\\chrome.exe", category: "Productive", duration_seconds: 5400, sessions: 12 },
-  { app_name: "Spotify", executable_path: "C:\\Spotify\\spotify.exe", category: "Entertainment", duration_seconds: 3600, sessions: 2 },
-  { app_name: "Discord", executable_path: "C:\\Discord\\discord.exe", category: "Social", duration_seconds: 1800, sessions: 5 },
-  { app_name: "Steam", executable_path: "C:\\Steam\\steam.exe", category: "Gaming", duration_seconds: 900, sessions: 1 },
-  { app_name: "Notion", executable_path: "C:\\Notion\\notion.exe", category: "Productive", duration_seconds: 2700, sessions: 4 },
-  { app_name: "Slack", executable_path: "C:\\Slack\\slack.exe", category: "Productive", duration_seconds: 1200, sessions: 8 },
-  { app_name: "Terminal", executable_path: "C:\\Windows\\cmd.exe", category: "Development", duration_seconds: 2400, sessions: 6 },
-];
-
-let _mockAppList: (App & { total_seconds: number })[] = _initialMockApps.map((a, i) => ({
-  id: i + 1,
-  app_name: a.app_name,
-  display_name: a.app_name,
-  executable_path: a.executable_path,
-  category: a.category as any,
-  total_seconds: a.duration_seconds,
-  is_ignored: false,
-}));
-
-function getMockData(cmd: string, args?: Record<string, unknown>): unknown {
-  const today = new Date().toISOString().split("T")[0];
-
-  const mockApps = _mockAppList.map(a => ({
-    app_name: a.app_name,
-    executable_path: a.executable_path,
-    category: a.category as any,
-    duration_seconds: a.total_seconds,
-    sessions: 1,
-  }));
-
-  const totalActive = mockApps.reduce((s, a) => s + a.duration_seconds, 0);
-  // const productive = mockApps
-  //   .filter(a => ["Development", "Productive", "Study"].includes(a.category))
-  //   .reduce((s, a) => s + a.duration_seconds, 0);
-
-  const categories: CategoryUsage[] = [
-    { category: "Development", duration_seconds: 9600 },
-    { category: "Productive", duration_seconds: 9300 },
-    { category: "Entertainment", duration_seconds: 3600 },
-    { category: "Social", duration_seconds: 1800 },
-    { category: "Gaming", duration_seconds: 900 },
-  ];
-
-  const todayStats: DailyStats = {
-    date: today,
-    total_active_seconds: totalActive,
-    total_idle_seconds: 3600,
-    apps: mockApps,
-    categories,
-  };
-
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    const active = 14400 + Math.random() * 14400;
-    return {
-      date: d.toISOString().split("T")[0],
-      active_seconds: Math.round(active),
-      idle_seconds: Math.round(active * 0.2),
-    };
-  });
-
-  switch (cmd) {
-    case "get_today_stats":
-    case "get_daily_usage":
-      return todayStats;
-
-    case "get_weekly_usage":
-      return { start_date: args?.startDate, days: weekDays, top_apps: mockApps.slice(0, 5) };
-
-    case "get_monthly_usage": {
-      const days = Array.from({ length: 30 }, (_, i) => {
-        const d = new Date(args?.year as number, (args?.month as number) - 1, i + 1);
-        return { date: d.toISOString().split("T")[0], active_seconds: Math.round(10800 + Math.random() * 18000) };
-      });
-      return { year: args?.year, month: args?.month, days };
-    }
-
-    case "get_app_list":
-      return _mockAppList.map(a => ({
-        id: a.id,
-        app_name: a.app_name,
-        display_name: a.display_name,
-        executable_path: a.executable_path,
-        category: a.category as any,
-        total_seconds: a.total_seconds,
-        is_ignored: a.is_ignored,
-      }));
-
-    case "get_hourly_heatmap": {
-      const hours = Array.from({ length: 24 }, (_, i) => {
-        if (i < 7 || i > 22) return 0;
-        if (i >= 9 && i <= 18) return Math.round(1800 + Math.random() * 3600);
-        return Math.round(300 + Math.random() * 1200);
-      });
-      return { date: args?.date, hours };
-    }
-
-    case "get_timeline": {
-      const sessions = _mockAppList.slice(0, 5).map((app, i) => ({
-        app_name: app.app_name, category: app.category,
-        window_title: `${app.app_name} - Window ${i + 1}`,
-        start_time: `${today}T${String(8 + i).padStart(2, "0")}:00:00`,
-        end_time: `${today}T${String(9 + i).padStart(2, "0")}:00:00`,
-        duration_seconds: 3600, was_idle: false,
-      }));
-      return { date: args?.date, sessions };
-    }
-
-    case "is_tracking_paused": return false;
-    case "get_current_session": return { current_app: "VS Code", session_start: new Date().toISOString(), is_idle: false };
-
-    case "set_app_ignored": {
-      const app_id = Number(args?.appId ?? -1);
-      const ignored = Boolean(args?.ignored);
-      const idx = _mockAppList.findIndex(a => a.id === app_id);
-      if (idx >= 0) { _mockAppList[idx].is_ignored = ignored; }
-      return null;
-    }
-
-    case "update_app_category": {
-      const app_id = Number(args?.appId ?? -1);
-      const category = String(args?.category ?? "Other");
-      const idx = _mockAppList.findIndex(a => a.id === app_id);
-      if (idx >= 0) { _mockAppList[idx].category = category as any; }
-      return null;
-    }
-
-    case "update_app_display_name": {
-      const app_id = Number(args?.appId ?? -1);
-      const display_name = String(args?.displayName ?? "");
-      const idx = _mockAppList.findIndex(a => a.id === app_id);
-      if (idx >= 0 && display_name) { _mockAppList[idx].display_name = display_name; }
-      return null;
-    }
-
-    default: return null;
-  }
-}

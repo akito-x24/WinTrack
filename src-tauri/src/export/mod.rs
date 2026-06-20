@@ -28,13 +28,19 @@ fn export_csv(sessions: &[serde_json::Value], output_path: &str) -> Result<Strin
     let mut wtr = csv::Writer::from_path(output_path)
         .with_context(|| format!("Cannot write to {}", output_path))?;
 
-    wtr.write_record(&[
-        "app_name", "executable_path", "category", "window_title",
-        "start_time", "end_time", "duration_seconds", "was_idle",
+    wtr.write_record([
+        "app_name",
+        "executable_path",
+        "category",
+        "window_title",
+        "start_time",
+        "end_time",
+        "duration_seconds",
+        "was_idle",
     ])?;
 
     for s in sessions {
-        wtr.write_record(&[
+        wtr.write_record([
             s["app_name"].as_str().unwrap_or(""),
             s["executable_path"].as_str().unwrap_or(""),
             s["category"].as_str().unwrap_or(""),
@@ -42,7 +48,11 @@ fn export_csv(sessions: &[serde_json::Value], output_path: &str) -> Result<Strin
             s["start_time"].as_str().unwrap_or(""),
             s["end_time"].as_str().unwrap_or(""),
             &s["duration_seconds"].as_i64().unwrap_or(0).to_string(),
-            if s["was_idle"].as_bool().unwrap_or(false) { "true" } else { "false" },
+            if s["was_idle"].as_bool().unwrap_or(false) {
+                "true"
+            } else {
+                "false"
+            },
         ])?;
     }
 

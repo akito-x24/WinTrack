@@ -96,7 +96,7 @@ export default function SettingsPage() {
               onChange={(e) =>
                 set("polling_interval_ms", Number(e.target.value))
               }
-              className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5"
+              className="bg-wt-card border border-wt-border text-wt-text text-sm rounded-lg px-3 py-1.5"
             >
               <option value={1000}>1 second</option>
               <option value={2000}>2 seconds</option>
@@ -116,7 +116,7 @@ export default function SettingsPage() {
                   Number(e.target.value)
                 )
               }
-              className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5"
+              className="bg-wt-card border border-wt-border text-wt-text text-sm rounded-lg px-3 py-1.5"
             >
               <option value={0}>Never</option>
               <option value={5}>5 minutes</option>
@@ -164,7 +164,7 @@ export default function SettingsPage() {
             onClick={resetTrackingData}
             className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${pendingReset === "reset"
                 ? "border-yellow-500 text-yellow-400 bg-yellow-500/10"
-                // : "border-fp-border hover:bg-fp-border"
+                // : "border-wt-border hover:bg-wt-border"
                 : "border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
               }`}
           >
@@ -193,12 +193,12 @@ export default function SettingsPage() {
       </SettingsSection>
 
             {pendingReset !== "none" && (
-        <div className="fp-card border border-red-500/30 bg-red-500/10 p-4">
+        <div className="wt-card border border-red-500/30 bg-red-500/10 p-4">
           <div className="text-red-400 font-medium">
             ⚠ Pending Action
           </div>
 
-          <div className="text-sm text-fp-muted mt-1">
+          <div className="text-sm text-wt-muted mt-1">
             {pendingReset === "reset"
               ? "All tracking history will be deleted when you click Save Settings."
               : "All tracking history and settings will be deleted when you click Save Settings."}
@@ -207,8 +207,8 @@ export default function SettingsPage() {
       )}
 
       {/* Save */}
-      <div className="flex justify-end pt-4 border-t border-fp-border">
-        <button onClick={save} className="fp-btn-primary px-8">
+      <div className="flex justify-end pt-4 border-t border-wt-border">
+        <button onClick={save} className="wt-btn-primary px-8">
           {saved ? "✓ Saved" : "Save Settings"}
         </button>
       </div>
@@ -219,8 +219,8 @@ export default function SettingsPage() {
 function SettingsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="fp-label mb-3">{title}</h2>
-      <div className="fp-card p-0 divide-y divide-fp-border">{children}</div>
+      <h2 className="wt-label mb-3">{title}</h2>
+      <div className="wt-card p-0 divide-y divide-wt-border">{children}</div>
     </div>
   );
 }
@@ -231,8 +231,8 @@ function SettingsRow({ label, description, children }: {
   return (
     <div className="flex items-start justify-between gap-4 px-5 py-4">
       <div className="flex-1">
-        <div className="text-sm font-medium text-fp-text">{label}</div>
-        <div className="text-xs text-fp-muted mt-0.5">{description}</div>
+        <div className="text-sm font-medium text-wt-text">{label}</div>
+        <div className="text-xs text-wt-muted mt-0.5">{description}</div>
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -243,7 +243,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <button
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${checked ? "bg-fp-accent" : "bg-fp-border"
+      className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${checked ? "bg-wt-accent" : "bg-wt-border"
         }`}
     >
       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${checked ? "translate-x-5" : "translate-x-0.5"

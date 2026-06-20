@@ -1,9 +1,11 @@
-use anyhow::{Context, Result};
 use crate::browser_pwa;
+use anyhow::{Context, Result};
 use chrono::Local;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
-use std::path::Path;
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use windows::core::{Interface, PCWSTR};
 use windows::Win32::Graphics::Gdi::{
@@ -338,53 +340,6 @@ impl Database {
             log::info!("Migration: added apps.last_reminder_usage_seconds");
         }
 
-        //COMING SOON - FEATURE UNDER PROGRESS
-        // Create app_locks table for tracking soft-lock lockouts
-    //     let has_app_locks: bool = self
-    //         .conn
-    //         .query_row(
-    //             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_locks'",
-    //             [],
-    //             |r| r.get::<_, i64>(0),
-    //         )
-    //         .unwrap_or(0)
-    //         > 0;
-
-    //     if !has_app_locks {
-    //         self.conn.execute_batch(
-    //             "CREATE TABLE IF NOT EXISTS app_locks (
-    //                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-    //                 app_id INTEGER NOT NULL,
-    //                 lock_start TEXT NOT NULL DEFAULT (datetime('now')),
-    //                 lock_expiration TEXT NOT NULL,
-    //                 reason TEXT NOT NULL DEFAULT 'limit_reached',
-    //                 FOREIGN KEY (app_id) REFERENCES apps(id)
-    //             );
-    //             CREATE INDEX IF NOT EXISTS idx_locks_app_id ON app_locks(app_id);
-    //             CREATE INDEX IF NOT EXISTS idx_locks_expiration ON app_locks(lock_expiration);
-    //             ",
-    //         )?;
-    //         log::info!("Migration: created app_locks table");
-    //     }
-
-    //     // Track limit reached events to prevent window spam
-    //     let has_limit_reached_today: bool = self
-    //         .conn
-    //         .query_row(
-    //             "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='limit_reached_today'",
-    //             [],
-    //             |r| r.get::<_, i64>(0),
-    //         )
-    //         .unwrap_or(0)
-    //         > 0;
-
-    //     if !has_limit_reached_today {
-    //         self.conn.execute_batch(
-    //             "ALTER TABLE apps ADD COLUMN limit_reached_today INTEGER NOT NULL DEFAULT 0;",
-    //         )?;
-    //         log::info!("Migration: added apps.limit_reached_today");
-    //     }
-
         Ok(())
     }
 
@@ -408,10 +363,12 @@ impl Database {
             )
             .unwrap_or(None);
 
-        let icon_data = if existing_icon.is_none() {
-            extract_icon_base64(executable_path).or_else(|| Some(String::new()))
+        let should_refresh_icon = should_refresh_icon(executable_path, existing_icon.as_deref());
+        let force_icon_replace = browser_pwa::is_pwa_identifier(executable_path);
+        let icon_data = if should_refresh_icon {
+            extract_icon_base64(executable_path)
         } else {
-            existing_icon
+            existing_icon.filter(|icon| !icon.trim().is_empty())
         };
 
         // Insert only if not already known - never overwrite display_name or is_ignored on conflict
@@ -421,14 +378,22 @@ impl Database {
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                 ON CONFLICT(executable_path) DO UPDATE SET
                     app_name = apps.app_name,
-                    icon_data = COALESCE(apps.icon_data, excluded.icon_data)",
+                    icon_data = CASE
+                        WHEN ?7 = 1 THEN excluded.icon_data
+                        WHEN excluded.icon_data IS NOT NULL
+                            AND (?8 = 1 OR apps.icon_data IS NULL OR TRIM(apps.icon_data) = '')
+                        THEN excluded.icon_data
+                        ELSE apps.icon_data
+                    END",
             params![
                 app_name,
                 display_name,
                 executable_path,
                 icon_data,
                 category,
-                auto_ignored as i32
+                auto_ignored as i32,
+                force_icon_replace as i32,
+                should_refresh_icon as i32,
             ],
         )?;
 
@@ -443,6 +408,7 @@ impl Database {
 
     /// Set per-app daily limit in minutes. None removes the limit.
     pub fn update_app_daily_limit(&self, app_id: i64, limit_minutes: Option<i64>) -> Result<()> {
+        let limit_minutes = normalize_daily_limit(limit_minutes)?;
         self.conn.execute(
             "UPDATE apps SET daily_limit_minutes = ?1 WHERE id = ?2",
             params![limit_minutes, app_id],
@@ -736,6 +702,20 @@ impl Database {
         Ok(name)
     }
 
+    pub fn get_app_soft_lock_details(&self, app_id: i64) -> Result<(String, Option<String>)> {
+        let details = self.conn.query_row(
+            "
+        SELECT COALESCE(display_name, app_name), icon_data
+        FROM apps
+        WHERE id = ?1
+        ",
+            params![app_id],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?)),
+        )?;
+
+        Ok(details)
+    }
+
     pub fn increment_soft_lock_counter(&self, app_id: i64) -> Result<()> {
         self.conn.execute(
             "
@@ -773,93 +753,6 @@ impl Database {
         )?;
         Ok(())
     }
-
-    /// Create a lock for an app (soft-lock lockout after limit reached and app closed)
-    pub fn create_app_lock(&self, app_id: i64, lock_duration_minutes: i64) -> Result<()> {
-        let expiration = chrono::Local::now()
-            .checked_add_signed(chrono::Duration::minutes(lock_duration_minutes))
-            .ok_or_else(|| anyhow::anyhow!("Failed to calculate lock expiration"))?
-            .format("%Y-%m-%dT%H:%M:%S")
-            .to_string();
-
-        self.conn.execute(
-            "INSERT INTO app_locks (app_id, lock_expiration, reason) VALUES (?1, ?2, 'limit_reached')",
-            params![app_id, expiration],
-        )?;
-        Ok(())
-    }
-
-    //COMING SOON - FEATURE UNDER PROGRESS
-    /// Check if an app currently has an active lock
-    pub fn get_app_lock(&self, app_id: i64) -> Result<Option<(i64, String)>> {
-        let result = self.conn.query_row(
-            "SELECT id, lock_expiration FROM app_locks 
-             WHERE app_id = ?1 AND datetime(lock_expiration) > datetime('now')
-             ORDER BY lock_expiration DESC LIMIT 1",
-            params![app_id],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
-        );
-
-        match result {
-            Ok((id, expiration)) => Ok(Some((id, expiration))),
-            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    /// Remove a specific lock
-    pub fn remove_app_lock(&self, lock_id: i64) -> Result<()> {
-        self.conn.execute("DELETE FROM app_locks WHERE id = ?1", params![lock_id])?;
-        Ok(())
-    }
-
-    /// Clean up expired locks
-    pub fn cleanup_expired_locks(&self) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM app_locks WHERE datetime(lock_expiration) <= datetime('now')",
-            [],
-        )?;
-        Ok(())
-    }
-
-    /// Mark that limit was reached today for this app (prevent repeated warnings)
-    pub fn mark_limit_reached_today(&self, app_id: i64) -> Result<()> {
-        self.conn.execute(
-            "UPDATE apps SET limit_reached_today = 1 WHERE id = ?1",
-            params![app_id],
-        )?;
-        Ok(())
-    }
-
-    /// Check if limit was already reached today for this app
-    pub fn is_limit_reached_today(&self, app_id: i64) -> Result<bool> {
-        let reached = self.conn.query_row(
-            "SELECT limit_reached_today FROM apps WHERE id = ?1",
-            params![app_id],
-            |r| r.get::<_, bool>(0),
-        )?;
-        Ok(reached)
-    }
-
-    /// Reset daily limit reached flag (called daily)
-    pub fn reset_daily_limit_flags(&self, today: &str) -> Result<()> {
-        self.conn.execute(
-            "UPDATE apps SET limit_reached_today = 0 WHERE is_ignored = 0",
-            [],
-        )?;
-        Ok(())
-    }
-    
-
-    //COMING SOON - FEATURE UNDER PROGRESS
-    // /// Reset limit reached flag for a specific app (after user grants 5 more minutes)
-    // pub fn reset_app_limit_flag(&self, app_id: i64) -> Result<()> {
-    //     self.conn.execute(
-    //         "UPDATE apps SET limit_reached_today = 0 WHERE id = ?1",
-    //         params![app_id],
-    //     )?;
-    //     Ok(())
-    // }
 
     pub fn get_daily_usage(&self, date: &str) -> Result<Value> {
         let mut stmt = self.conn.prepare(
@@ -1292,6 +1185,46 @@ fn auto_categorize(app_name: &str, exe_path: &str) -> &'static str {
     if matches_any(
         &lower,
         &[
+            "7-zip",
+            "7zip",
+            "calculator",
+            "control panel",
+            "disk cleanup",
+            "everything",
+            "explorer",
+            "file explorer",
+            "powertoys",
+            "process explorer",
+            "process monitor",
+            "regedit",
+            "registry editor",
+            "resource monitor",
+            "settings",
+            "snip",
+            "task manager",
+            "winrar",
+            "windows security",
+        ],
+    ) || matches_any(
+        &path_lower,
+        &[
+            "\\7-zip\\",
+            "\\everything\\",
+            "\\powertoys\\",
+            "\\winrar\\",
+            "calculator",
+            "controlpanel",
+            "explorer.exe",
+            "ms-settings",
+            "regedit.exe",
+            "taskmgr.exe",
+        ],
+    ) {
+        return "Tools";
+    }
+    if matches_any(
+        &lower,
+        &[
             "word",
             "excel",
             "powerpoint",
@@ -1408,6 +1341,14 @@ fn auto_ignore_app(app_name: &str, exe_path: &str) -> bool {
     ) || path_lower.contains("\\windows\\systemapps\\")
 }
 
+fn normalize_daily_limit(limit_minutes: Option<i64>) -> Result<Option<i64>> {
+    match limit_minutes {
+        None | Some(0) => Ok(None),
+        Some(minutes) if (15..=1440).contains(&minutes) && minutes % 15 == 0 => Ok(Some(minutes)),
+        Some(_) => anyhow::bail!("Daily limit must be 0 or a 15-minute increment from 15 to 1440"),
+    }
+}
+
 fn get_file_description(exe_path: &str) -> Option<String> {
     let wide_path: Vec<u16> = exe_path.encode_utf16().chain(std::iter::once(0)).collect();
 
@@ -1422,7 +1363,7 @@ fn get_file_description(exe_path: &str) -> Option<String> {
 
         let mut buffer = vec![0u8; size as usize];
 
-        if !GetFileVersionInfoW(
+        if GetFileVersionInfoW(
             PCWSTR(wide_path.as_ptr()),
             Some(0),
             size,
@@ -1476,44 +1417,179 @@ fn extract_icon_base64(exe_path: &str) -> Option<String> {
         if let Some(icon_path) = browser_pwa::icon_path_for_identifier(exe_path) {
             browser_pwa::encode_png_icon(&icon_path)
                 .or_else(|| extract_executable_icon_base64(&icon_path.to_string_lossy()))
-        } else if let Some(browser_exe) = browser_pwa::browser_executable_for_identifier(exe_path) {
-            extract_executable_icon_base64(&browser_exe)
         } else {
             None
         }
     } else if seems_uwp_package_id(exe_path) {
         extract_app_user_model_id_icon_base64(exe_path)
+    } else if is_windows_apps_executable_path(exe_path) {
+        extract_windows_apps_manifest_icon_base64(exe_path)
+            .or_else(|| extract_executable_icon_base64(exe_path))
     } else {
         extract_executable_icon_base64(exe_path)
     }
+}
+
+fn should_refresh_icon(exe_path: &str, existing_icon: Option<&str>) -> bool {
+    !has_cached_icon(existing_icon)
+        || browser_pwa::is_pwa_identifier(exe_path)
+        || seems_uwp_package_id(exe_path)
+        || is_windows_apps_executable_path(exe_path)
+}
+
+fn has_cached_icon(existing_icon: Option<&str>) -> bool {
+    existing_icon
+        .map(|icon| !icon.trim().is_empty())
+        .unwrap_or(false)
 }
 
 fn seems_uwp_package_id(exe_path: &str) -> bool {
     exe_path.contains('!') && !exe_path.contains('\\') && !exe_path.contains('/')
 }
 
+fn is_windows_apps_executable_path(exe_path: &str) -> bool {
+    exe_path
+        .to_lowercase()
+        .contains(r"\program files\windowsapps\")
+}
+
 fn extract_app_user_model_id_icon_base64(app_user_model_id: &str) -> Option<String> {
     const ICON_SIZE: i32 = 64;
     let shell_path = format!("shell:AppsFolder\\{}", app_user_model_id);
-    let shell_path_w: Vec<u16> = shell_path.encode_utf16().chain(std::iter::once(0)).collect();
+    let shell_path_w: Vec<u16> = shell_path
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
 
     unsafe {
-        let shell_item: IShellItem = SHCreateItemFromParsingName(PCWSTR(shell_path_w.as_ptr()), None).ok()?;
+        let shell_item: IShellItem =
+            SHCreateItemFromParsingName(PCWSTR(shell_path_w.as_ptr()), None).ok()?;
         let image_factory: IShellItemImageFactory = shell_item.cast().ok()?;
 
-        let bitmap = image_factory.GetImage(
-            windows::Win32::Foundation::SIZE {
-                cx: ICON_SIZE,
-                cy: ICON_SIZE,
-            },
-            SIIGBF_RESIZETOFIT,
-        )
-        .ok()?;
+        let bitmap = image_factory
+            .GetImage(
+                windows::Win32::Foundation::SIZE {
+                    cx: ICON_SIZE,
+                    cy: ICON_SIZE,
+                },
+                SIIGBF_RESIZETOFIT,
+            )
+            .ok()?;
 
         let result = encode_hbitmap_as_base64_png(bitmap);
         let _ = DeleteObject(bitmap.into());
         result
     }
+}
+
+fn extract_windows_apps_manifest_icon_base64(exe_path: &str) -> Option<String> {
+    let package_dir = Path::new(exe_path).parent()?;
+    let manifest_path = package_dir.join("AppxManifest.xml");
+    let manifest = fs::read_to_string(manifest_path).ok()?;
+    let mut candidates = collect_manifest_icon_candidates(package_dir, &manifest);
+    candidates.sort_by_key(|path| {
+        fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0)
+    });
+    candidates.dedup();
+
+    candidates
+        .into_iter()
+        .rev()
+        .find_map(|path| encode_icon_file_base64(&path))
+}
+
+fn collect_manifest_icon_candidates(package_dir: &Path, manifest: &str) -> Vec<PathBuf> {
+    let mut values = Vec::new();
+    for attribute in ["Square44x44Logo", "Square150x150Logo", "Logo"] {
+        values.extend(extract_xml_attribute_values(manifest, attribute));
+    }
+
+    let mut seen = HashSet::new();
+    let mut candidates = Vec::new();
+    for value in values {
+        for candidate in expand_manifest_icon_value(package_dir, &value) {
+            if candidate.exists() && seen.insert(candidate.clone()) {
+                candidates.push(candidate);
+            }
+        }
+    }
+    candidates
+}
+
+fn extract_xml_attribute_values(xml: &str, attribute: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    for quote in ['"', '\''] {
+        let needle = format!("{}={}", attribute, quote);
+        let mut rest = xml;
+        while let Some(index) = rest.find(&needle) {
+            let value_start = index + needle.len();
+            let after_start = &rest[value_start..];
+            let Some(value_end) = after_start.find(quote) else {
+                break;
+            };
+            values.push(after_start[..value_end].to_string());
+            rest = &after_start[value_end + quote.len_utf8()..];
+        }
+    }
+    values
+}
+
+fn expand_manifest_icon_value(package_dir: &Path, value: &str) -> Vec<PathBuf> {
+    let relative = value.replace('/', "\\");
+    let exact_path = package_dir.join(&relative);
+    let mut candidates = vec![exact_path.clone()];
+
+    let Some(parent) = exact_path.parent() else {
+        return candidates;
+    };
+    let Some(stem) = exact_path.file_stem().and_then(|stem| stem.to_str()) else {
+        return candidates;
+    };
+
+    let Ok(entries) = fs::read_dir(parent) else {
+        return candidates;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !is_supported_icon_file(&path) {
+            continue;
+        }
+        let Some(candidate_stem) = path.file_stem().and_then(|candidate| candidate.to_str()) else {
+            continue;
+        };
+        if candidate_stem
+            .to_lowercase()
+            .starts_with(&stem.to_lowercase())
+        {
+            candidates.push(path);
+        }
+    }
+
+    candidates
+}
+
+fn encode_icon_file_base64(path: &Path) -> Option<String> {
+    if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("png"))
+        .unwrap_or(false)
+    {
+        return fs::read(path)
+            .ok()
+            .map(|bytes| general_purpose::STANDARD.encode(bytes));
+    }
+
+    extract_executable_icon_base64(&path.to_string_lossy())
+}
+
+fn is_supported_icon_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| matches!(ext.to_lowercase().as_str(), "png" | "ico"))
+        .unwrap_or(false)
 }
 
 fn extract_executable_icon_base64(exe_path: &str) -> Option<String> {
@@ -1780,8 +1856,6 @@ unsafe fn read_icon_mask(
             .collect(),
     )
 }
-
-use std::fs;
 
 fn get_friendly_name(executable_path: &str) -> Option<String> {
     if browser_pwa::is_pwa_identifier(executable_path) {

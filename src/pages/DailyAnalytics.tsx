@@ -49,7 +49,7 @@ export default function DailyAnalytics() {
       <div className="flex items-center gap-3">
         <button
           onClick={() => changeDate(subtractDays(date, 1))}
-          className="fp-btn-ghost px-2 py-1.5"
+          className="wt-btn-ghost px-2 py-1.5"
         >
           ←
         </button>
@@ -58,18 +58,18 @@ export default function DailyAnalytics() {
           value={date}
           max={todayString()}
           onChange={e => changeDate(e.target.value)}
-          className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-fp-accent"
+          className="bg-wt-card border border-wt-border text-wt-text text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-wt-accent"
         />
         <button
           onClick={() => {
             if (date < todayString()) changeDate(subtractDays(date, -1));
           }}
-          className="fp-btn-ghost px-2 py-1.5"
+          className="wt-btn-ghost px-2 py-1.5"
           disabled={date >= todayString()}
         >
           →
         </button>
-        <button onClick={() => changeDate(todayString())} className="fp-btn-ghost text-xs">
+        <button onClick={() => changeDate(todayString())} className="wt-btn-ghost text-xs">
           Today
         </button>
       </div>
@@ -106,17 +106,17 @@ export default function DailyAnalytics() {
           </div>
 
           {/* Heatmap */}
-          <div className="fp-card">
+          <div className="wt-card">
             <SectionHeader title="Hourly Breakdown" />
             <HourlyHeatmap date={date} />
           </div>
 
           {/* App list + categories */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-2 fp-card">
+            <div className="col-span-2 wt-card">
               <SectionHeader title="Apps Used" />
               {stats.apps.length > 0 ? (
-                <div className="divide-y divide-fp-border/50">
+                <div className="divide-y divide-wt-border/50">
                   {stats.apps.map((app, i) => (
                     <AppRow
                       key={app.executable_path}
@@ -131,10 +131,10 @@ export default function DailyAnalytics() {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-fp-muted text-center py-8">No data for this day</p>
+                <p className="text-sm text-wt-muted text-center py-8">No data for this day</p>
               )}
             </div>
-            <div className="fp-card">
+            <div className="wt-card">
               <SectionHeader title="Categories" />
               <CategoryPieChart
                 categories={stats.categories}
@@ -144,7 +144,7 @@ export default function DailyAnalytics() {
           </div>
         </>
       ) : (
-        <p className="text-fp-muted text-sm">No data for {date}</p>
+        <p className="text-wt-muted text-sm">No data for {date}</p>
       )}
     </div>
   );

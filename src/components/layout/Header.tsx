@@ -16,22 +16,22 @@ export default function Header() {
   const { view, currentSession, isTrackingPaused, refreshAll } = useStore();
 
   return (
-    <header className="h-14 flex items-center justify-between px-6 border-b border-fp-border bg-fp-surface/60 backdrop-blur-sm shrink-0">
-      <h1 className="text-sm font-semibold text-fp-text">{VIEW_TITLES[view]}</h1>
+    <header className="h-14 flex items-center justify-between px-6 border-b border-wt-border bg-wt-surface/60 backdrop-blur-sm shrink-0">
+      <h1 className="text-sm font-semibold text-wt-text">{VIEW_TITLES[view]}</h1>
 
       <div className="flex items-center gap-4">
         {/* Live session indicator */}
         {!isTrackingPaused && currentSession?.current_app && (
-          <div className="flex items-center gap-2 bg-fp-card border border-fp-border px-3 py-1.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-fp-green animate-pulse" />
-            <span className="text-xs text-fp-muted">
+          <div className="flex items-center gap-2 bg-wt-card border border-wt-border px-3 py-1.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-wt-green animate-pulse" />
+            <span className="text-xs text-wt-muted">
               {currentSession.current_app.replace(/\.exe$/i, "")}
             </span>
           </div>
         )}
 
         {/* Date */}
-        <span className="text-xs text-fp-muted">
+        <span className="text-xs text-wt-muted">
           {new Date().toLocaleDateString("en-US", {
             weekday: "long",
             day: "numeric",
@@ -42,7 +42,7 @@ export default function Header() {
         {/* Refresh */}
         <button
           onClick={() => refreshAll()}
-          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-fp-border text-fp-muted hover:text-fp-text transition-colors"
+          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-wt-border text-wt-muted hover:text-wt-text transition-colors"
           title="Refresh data"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

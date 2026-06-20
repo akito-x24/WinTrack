@@ -6,8 +6,8 @@ use tauri::{
 };
 use tauri_plugin_autostart::MacosLauncher;
 
-mod database;
 mod browser_pwa;
+mod database;
 mod export;
 mod monitoring;
 mod services;
@@ -240,6 +240,45 @@ async fn close_process(process_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn grant_app_more_time(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app_id: i64,
+) -> Result<(), String> {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let mut state = state.lock().map_err(|e| e.to_string())?;
+    state.retain_soft_lock_day(&today);
+    state.grant_soft_lock_extension(app_id, &today, 5 * 60);
+    Ok(())
+}
+
+#[tauri::command]
+async fn finish_soft_lock_warning(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app_id: i64,
+) -> Result<(), String> {
+    let mut state = state.lock().map_err(|e| e.to_string())?;
+    state.clear_soft_lock_active(app_id);
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_soft_lock_app_details(
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+    app_id: i64,
+) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|e| e.to_string())?;
+    let (display_name, icon_data) = state
+        .db
+        .get_app_soft_lock_details(app_id)
+        .map_err(|e| e.to_string())?;
+
+    Ok(serde_json::json!({
+        "display_name": display_name,
+        "icon_data": icon_data,
+    }))
+}
+
+#[tauri::command]
 async fn get_current_session(
     state: tauri::State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<serde_json::Value, String> {
@@ -262,23 +301,6 @@ async fn factory_reset(state: tauri::State<'_, Arc<Mutex<AppState>>>) -> Result<
     let state = state.lock().map_err(|e| e.to_string())?;
     state.db.factory_reset().map_err(|e| e.to_string())
 }
-
-// //COMING SOON - FEATURE UNDER PROGRESS
-// #[tauri::command]
-// async fn grant_app_more_time(
-//     state: tauri::State<'_, Arc<Mutex<AppState>>>,
-//     app_id: i64,
-// ) -> Result<(), String> {
-//     let state = state.lock().map_err(|e| e.to_string())?;
-    
-//     // Reset limit reached flag to allow 5 more minutes
-//     state
-//         .db
-//         .reset_app_limit_flag(app_id)
-//         .map_err(|e| e.to_string())?;
-
-//     Ok(())
-// }
 
 // ─── App Entry ────────────────────────────────────────────────────────────────
 
@@ -356,11 +378,27 @@ pub fn run() {
             monitoring::start_monitoring_loop(state_for_monitor, handle);
             Ok(())
         })
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                window.hide().unwrap();
-                api.prevent_close();
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                if window.label() == "main" {
+                    window.hide().unwrap();
+                    api.prevent_close();
+                } else if window.label() == "soft-lock" {
+                    if let Some(state) = window.app_handle().try_state::<Arc<Mutex<AppState>>>() {
+                        if let Ok(mut s) = state.lock() {
+                            s.active_soft_lock_app_ids.clear();
+                        }
+                    }
+                }
             }
+            tauri::WindowEvent::Destroyed if window.label() == "soft-lock" => {
+                if let Some(state) = window.app_handle().try_state::<Arc<Mutex<AppState>>>() {
+                    if let Ok(mut s) = state.lock() {
+                        s.active_soft_lock_app_ids.clear();
+                    }
+                }
+            }
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             get_today_stats,
@@ -384,12 +422,12 @@ pub fn run() {
             export_data,
             get_timeline,
             close_process,
+            grant_app_more_time,
+            finish_soft_lock_warning,
+            get_soft_lock_app_details,
             get_current_session,
             reset_tracking_data,
             factory_reset,
-
-            //COMING SOON - FEATURE UNDER PROGRESS
-            // grant_app_more_time,
         ])
         .build(tauri::generate_context!())
         .expect("Error building WinTrack app")

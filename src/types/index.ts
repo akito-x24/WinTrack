@@ -24,6 +24,7 @@ export type AppCategory =
   | "Gaming"
   | "Development"
   | "Study"
+  | "Tools"
   | "Other";
 
 export interface UsageSession {
@@ -110,10 +111,11 @@ export const CATEGORY_COLORS: Record<AppCategory, string> = {
   Social: "#FF2EA6",        // Neon Pink
   Entertainment: "#00E5FF", // Gold
   Gaming: "#FF4D00",        // Orange-Red
+  Tools: "#14B8A6",         // Teal
   Other: "#94A3B8",         // Slate
 };
 
 export const CATEGORY_LABELS: AppCategory[] = [
   "Productive", "Development", "Study",
-  "Entertainment", "Social", "Gaming", "Other",
+  "Entertainment", "Social", "Gaming", "Tools", "Other",
 ];

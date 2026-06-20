@@ -4,34 +4,34 @@
 
 @layer base {
   :root {
-    --fp-bg:      #0d0f14;
-    --fp-surface: #13161e;
-    --fp-card:    #1a1e28;
-    --fp-border:  #252a36;
-    --fp-accent:  #2e7af4;
+    --wt-bg:      #0d0f14;
+    --wt-surface: #13161e;
+    --wt-card:    #1a1e28;
+    --wt-border:  #252a36;
+    --wt-accent:  #2e7af4;
   }
 }
 
 @layer components {
-  .fp-card {
-    @apply bg-fp-card border border-fp-border rounded-xl p-5;
+  .wt-card {
+    @apply bg-wt-card border border-wt-border rounded-xl p-5;
   }
-  .fp-card-sm {
-    @apply bg-fp-card border border-fp-border rounded-lg p-4;
+  .wt-card-sm {
+    @apply bg-wt-card border border-wt-border rounded-lg p-4;
   }
-  .fp-btn {
+  .wt-btn {
     @apply px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer;
   }
-  .fp-btn-primary {
-    @apply fp-btn bg-fp-accent text-white hover:opacity-90;
+  .wt-btn-primary {
+    @apply wt-btn bg-wt-accent text-white hover:opacity-90;
   }
-  .fp-btn-ghost {
-    @apply fp-btn bg-transparent text-fp-muted hover:text-fp-text hover:bg-fp-border;
+  .wt-btn-ghost {
+    @apply wt-btn bg-transparent text-wt-muted hover:text-wt-text hover:bg-wt-border;
   }
-  .fp-label {
-    @apply text-xs font-medium text-fp-muted uppercase tracking-wider;
+  .wt-label {
+    @apply text-xs font-medium text-wt-muted uppercase tracking-wider;
   }
-  .fp-value {
-    @apply text-2xl font-semibold text-fp-text;
+  .wt-value {
+    @apply text-2xl font-semibold text-wt-text;
   }
 }

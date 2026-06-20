@@ -8,6 +8,28 @@ import clsx from "clsx";
 
 type EditMode = "category" | "name" | null;
 
+const DAILY_LIMIT_MINUTES_MIN = 15;
+const DAILY_LIMIT_MINUTES_MAX = 1440;
+const DAILY_LIMIT_MINUTES_STEP = 15;
+
+function parseDailyLimitInput(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+
+  const minutes = Number(trimmed);
+  if (minutes === 0) return null;
+  if (
+    minutes >= DAILY_LIMIT_MINUTES_MIN &&
+    minutes <= DAILY_LIMIT_MINUTES_MAX &&
+    minutes % DAILY_LIMIT_MINUTES_STEP === 0
+  ) {
+    return minutes;
+  }
+
+  return undefined;
+}
+
 export default function AppBreakdown() {
   const {
     appList,
@@ -82,7 +104,7 @@ export default function AppBreakdown() {
           placeholder="Search apps..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-fp-accent placeholder:text-fp-muted"
+          className="bg-wt-card border border-wt-border text-wt-text text-sm rounded-lg px-3 py-2 w-52 focus:outline-none focus:border-wt-accent placeholder:text-wt-muted"
         />
         <div className="flex flex-wrap gap-2">
           {(["All", ...CATEGORY_LABELS] as const).map(cat => (
@@ -90,7 +112,7 @@ export default function AppBreakdown() {
               key={cat}
               onClick={() => setCatFilter(cat as AppCategory | "All")}
               className={`text-xs px-3 py-1.5 rounded-full transition-all ${catFilter === cat ? "text-white font-medium"
-                : "text-fp-muted hover:text-fp-text bg-fp-card border border-fp-border"
+                : "text-wt-muted hover:text-wt-text bg-wt-card border border-wt-border"
                 }`}
               style={catFilter === cat ? {
                 background: cat === "All" ? "#3b82f6" : CATEGORY_COLORS[cat as AppCategory],
@@ -105,8 +127,8 @@ export default function AppBreakdown() {
           className={clsx(
             "ml-auto text-xs px-3 py-1.5 rounded-lg border transition-all",
             showIgnored
-              ? "bg-fp-amber/15 text-fp-amber border-fp-amber/30"
-              : "bg-fp-card text-fp-muted border-fp-border hover:text-fp-text"
+              ? "bg-wt-amber/15 text-wt-amber border-wt-amber/30"
+              : "bg-wt-card text-wt-muted border-wt-border hover:text-wt-text"
           )}
         >
           {showIgnored ? "Hide ignored" : "Show ignored"}
@@ -114,22 +136,22 @@ export default function AppBreakdown() {
       </div>
 
       {/* App table */}
-      <div className="fp-card p-0 overflow-hidden">
-        <div className="px-5 py-3 border-b border-fp-border bg-fp-surface/50 flex items-center justify-between">
-          <span className="text-sm font-medium text-fp-text">{filtered.length} apps</span>
-          {/* <span className="text-xs text-fp-muted">Click ✎ to rename · Click category to change · Click eye to ignore</span> */}
+      <div className="wt-card p-0 overflow-hidden">
+        <div className="px-5 py-3 border-b border-wt-border bg-wt-surface/50 flex items-center justify-between">
+          <span className="text-sm font-medium text-wt-text">{filtered.length} apps</span>
+          {/* <span className="text-xs text-wt-muted">Click ✎ to rename · Click category to change · Click eye to ignore</span> */}
         </div>
         {loading.apps && !appList ? (
           <div className="p-12 flex justify-center"><LoadingSpinner /></div>
         ) : filtered.length === 0 ? (
           <div className="p-12"><EmptyState message="No apps match your filters" /></div>
         ) : (
-          <div className="divide-y divide-fp-border/50 max-h-[600px] overflow-y-auto">
+          <div className="divide-y divide-wt-border/50 max-h-[600px] overflow-y-auto">
             {/* <table className="w-full">
               <tbody> */}
             <table className="w-full">
-              <thead className="sticky top-0 bg-fp-surface border-b border-fp-border">
-                <tr className="text-xs text-fp-muted">
+              <thead className="sticky top-0 bg-wt-surface border-b border-wt-border">
+                <tr className="text-xs text-wt-muted">
                   <th className="px-5 py-3 text-left">App</th>
                   <th className="px-4 py-3 text-right">Today</th>
                   <th className="px-4 py-3 text-right">Total</th>
@@ -175,14 +197,33 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
   const [nameInput, setNameInput] = useState(app.display_name);
   const [editingLimit, setEditingLimit] = useState(false);
   const [limitInput, setLimitInput] = useState(app.daily_limit_minutes?.toString() ?? "");
+  const [limitError, setLimitError] = useState<string | null>(null);
   const [editingReminder, setEditingReminder] = useState(false);
   const [editingSoftLock, setEditingSoftLock] = useState(false);
 
   useEffect(() => { setNameInput(app.display_name); }, [app.display_name]);
+  useEffect(() => {
+    if (!editingLimit) {
+      setLimitInput(app.daily_limit_minutes?.toString() ?? "");
+      setLimitError(null);
+    }
+  }, [app.daily_limit_minutes, editingLimit]);
+
+  const saveDailyLimit = async () => {
+    const parsed = parseDailyLimitInput(limitInput);
+    if (parsed === undefined) {
+      setLimitError("Use 0 or 15-1440 in 15m steps");
+      return;
+    }
+
+    await useStore.getState().updateAppDailyLimit(app.id, parsed);
+    setLimitError(null);
+    setEditingLimit(false);
+  };
 
   return (
     <tr className={clsx(
-      "group hover:bg-fp-surface/50 transition-colors",
+      "group hover:bg-wt-surface/50 transition-colors",
       app.is_ignored && "opacity-50"
     )}>
       <td className="px-5 py-3">
@@ -208,23 +249,23 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
                       if (e.key === "Enter" && nameInput.trim()) onSaveName(nameInput.trim());
                       if (e.key === "Escape") onClose();
                     }}
-                    className="bg-fp-surface border border-fp-accent text-fp-text text-sm rounded px-2 py-0.5 w-48 focus:outline-none"
+                    className="bg-wt-surface border border-wt-accent text-wt-text text-sm rounded px-2 py-0.5 w-48 focus:outline-none"
                   />
                   <button
                     onClick={() => { if (nameInput.trim()) onSaveName(nameInput.trim()); }}
                     disabled={!nameInput.trim()}
-                    className="text-xs text-fp-green hover:text-fp-green/80 disabled:opacity-40"
+                    className="text-xs text-wt-green hover:text-wt-green/80 disabled:opacity-40"
                   >✓</button>
-                  <button onClick={onClose} className="text-xs text-fp-red hover:text-fp-red/80">✕</button>
+                  <button onClick={onClose} className="text-xs text-wt-red hover:text-wt-red/80">✕</button>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 group/name">
-                  <span className="text-sm font-medium text-fp-text truncate">
+                  <span className="text-sm font-medium text-wt-text truncate">
                     {app.display_name || app.app_name}
                   </span>
                   <button
                     onClick={() => onOpenEdit("name")}
-                    className="text-fp-muted hover:text-fp-accent opacity-0 group-hover/name:opacity-100 transition-opacity text-xs ml-0.5"
+                    className="text-wt-muted hover:text-wt-accent opacity-0 group-hover/name:opacity-100 transition-opacity text-xs ml-0.5"
                     title="Rename app"
                   >
                     ✎
@@ -232,7 +273,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
                 </div>
               )}
               <div
-                className="text-xs text-fp-muted truncate max-w-[300px]"
+                className="text-xs text-wt-muted truncate max-w-[300px]"
                 title={app.executable_path}
               >
                 {app.app_name}
@@ -244,14 +285,14 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
       {/* Today */}
       <td className="px-4 py-3 text-right">
-        <span className="text-sm font-medium text-fp-text">
+        <span className="text-sm font-medium text-wt-text">
           {formatDuration(app.today_seconds ?? 0)}
         </span>
       </td>
 
       {/* Total */}
       <td className="px-4 py-3 text-right">
-        <span className="text-sm text-fp-muted">
+        <span className="text-sm text-wt-muted">
           {formatDuration(app.total_seconds)}
         </span>
       </td>
@@ -264,11 +305,12 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
               autoFocus
               defaultValue={app.category}
               onChange={e => onSaveCat(e.target.value as AppCategory)}
-              className="bg-fp-card border border-fp-border text-fp-text text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-fp-accent"
+              className="bg-wt-card border border-wt-border text-wt-text text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-wt-accent"
             >
               {CATEGORY_LABELS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
             </select>
-            <button onClick={onClose} className="text-xs text-fp-red">✕</button>
+            <button onClick={onClose} className="text-xs text-wt-red">✕</button>
+            
           </div>
         ) : (
           <button
@@ -283,51 +325,62 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
       <td className="px-4 py-3 text-right">
         {editingLimit ? (
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center justify-end gap-1">
             <input
               autoFocus
               type="number"
-              min="1"
+              min="0"
+              max={DAILY_LIMIT_MINUTES_MAX}
+              step={DAILY_LIMIT_MINUTES_STEP}
               placeholder="mins"
               value={limitInput}
-              onChange={(e) => setLimitInput(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (/^\d*$/.test(value)) {
+                  setLimitInput(value);
+                  setLimitError(null);
+                }
+              }}
               onKeyDown={async (e) => {
+                if (["-", "+", ".", "e", "E"].includes(e.key)) {
+                  e.preventDefault();
+                }
+
                 if (e.key === "Enter") {
-                  await useStore.getState().updateAppDailyLimit(
-                    app.id,
-                    limitInput.trim()
-                      ? Number(limitInput)
-                      : null
-                  );
-                  setEditingLimit(false);
+                  await saveDailyLimit();
                 }
 
                 if (e.key === "Escape") {
+                  setLimitInput(app.daily_limit_minutes?.toString() ?? "");
+                  setLimitError(null);
                   setEditingLimit(false);
                 }
               }}
-              className="w-16 px-2 py-1 text-xs rounded bg-fp-card border border-fp-border text-fp-text"
+              className={clsx(
+                "w-16 px-2 py-1 text-xs rounded bg-wt-card border text-wt-text",
+                limitError ? "border-wt-red" : "border-wt-border"
+              )}
             />
 
             <button
-              onClick={async () => {
-                await useStore.getState().updateAppDailyLimit(
-                  app.id,
-                  limitInput.trim()
-                    ? Number(limitInput)
-                    : null
-                );
-                setEditingLimit(false);
-              }}
-              className="text-fp-green text-xs"
+              onClick={saveDailyLimit}
+              disabled={parseDailyLimitInput(limitInput) === undefined}
+              className="text-wt-green text-xs disabled:opacity-40"
             >
               ✓
             </button>
+            </div>
+            {limitError && (
+              <span className="text-[10px] text-wt-red whitespace-nowrap">
+                {limitError}
+              </span>
+            )}
           </div>
         ) : (
           <button
             onClick={() => setEditingLimit(true)}
-            className="text-xs text-fp-accent hover:underline  rounded px-2 py-1 bg-fp-accent/0 transition-colors duration-200 hover:bg-fp-accent/10"
+            className="text-xs text-wt-accent hover:underline  rounded px-2 py-1 bg-wt-accent/0 transition-colors duration-200 hover:bg-wt-accent/10"
           >
             {app.daily_limit_minutes
               ? `${app.daily_limit_minutes}m`
@@ -352,7 +405,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
               setEditingReminder(false);
             }}
-            className="bg-fp-card border border-fp-border text-fp-text text-xs rounded-lg px-2 py-1"
+            className="bg-wt-card border border-wt-border text-wt-text text-xs rounded-lg px-2 py-1"
           >
             <option value={0}>Off</option>
             <option value={1}>1m</option>
@@ -366,7 +419,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
         ) : (
           <button
             onClick={() => setEditingReminder(true)}
-            className="text-xs text-fp-accent hover:underline rounded px-2 py-1 hover:bg-fp-accent/10"
+            className="text-xs text-wt-accent hover:underline rounded px-2 py-1 hover:bg-wt-accent/10"
           >
             {app.reminder_interval_minutes
               ? `${app.reminder_interval_minutes}m`
@@ -391,7 +444,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
               setEditingSoftLock(false);
             }}
-            className="bg-fp-card border border-fp-border text-fp-text text-xs rounded-lg px-2 py-1"
+            className="bg-wt-card border border-wt-border text-wt-text text-xs rounded-lg px-2 py-1"
           >
             <option value="off">Off</option>
             <option value="on">On</option>
@@ -399,7 +452,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
         ) : (
           <button
             onClick={() => setEditingSoftLock(true)}
-            className="text-xs text-fp-accent hover:underline rounded px-2 py-1 bg-fp-accent/0 transition-colors duration-200 hover:bg-fp-accent/10"
+            className="text-xs text-wt-accent hover:underline rounded px-2 py-1 bg-wt-accent/0 transition-colors duration-200 hover:bg-wt-accent/10"
           >
             {app.soft_lock_enabled ? "On" : "Off"}
           </button>
@@ -410,7 +463,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
         {(() => {
           if (app.is_ignored) {
             return (
-              <span className="text-xs px-2 py-1 rounded-full bg-fp-border text-fp-muted">
+              <span className="text-xs px-2 py-1 rounded-full bg-wt-border text-wt-muted">
                 Ignored
               </span>
             );
@@ -418,7 +471,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
           if (!app.daily_limit_minutes || !app.today_seconds) {
             return (
-              <span className="text-xs px-2 py-1 rounded-full bg-fp-accent/10 text-fp-accent">
+              <span className="text-xs px-2 py-1 rounded-full bg-wt-accent/10 text-wt-accent">
                 Normal
               </span>
             );
@@ -429,7 +482,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
           if (usagePct >= 100) {
             return (
-              <span className="text-xs px-2 py-1 rounded-full bg-fp-red/10 text-fp-red">
+              <span className="text-xs px-2 py-1 rounded-full bg-wt-red/10 text-wt-red">
                 Over Limit
               </span>
             );
@@ -437,14 +490,14 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
 
           if (usagePct >= 90) {
             return (
-              <span className="text-xs px-2 py-1 rounded-full bg-fp-amber/10 text-fp-amber">
+              <span className="text-xs px-2 py-1 rounded-full bg-wt-amber/10 text-wt-amber">
                 Near Limit
               </span>
             );
           }
 
           return (
-            <span className="text-xs px-2 py-1 rounded-full bg-fp-green/10 text-fp-green">
+            <span className="text-xs px-2 py-1 rounded-full bg-wt-green/10 text-wt-green">
               Normal
             </span>
           );
@@ -455,7 +508,7 @@ function AppEditRow({ app, editMode, onOpenEdit, onClose, onSaveName, onSaveCat,
       <td className="px-5 py-3 text-right">
         <button
           onClick={onToggleIgnore}
-          className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${app.is_ignored ? "text-fp-amber bg-fp-amber/10 hover:bg-fp-amber/20" : "text-fp-muted hover:text-fp-text hover:bg-fp-border"
+          className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors ${app.is_ignored ? "text-wt-amber bg-wt-amber/10 hover:bg-wt-amber/20" : "text-wt-muted hover:text-wt-text hover:bg-wt-border"
             }`}
           title={app.is_ignored ? "Resume tracking" : "Ignore app"}
         >

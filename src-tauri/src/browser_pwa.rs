@@ -85,14 +85,6 @@ pub fn resolve_browser_pwa(
 ) -> Option<BrowserPwa> {
     let candidates = collect_start_menu_candidates(browser);
 
-    if let Some(registration) = resolve_from_app_user_model_id(browser, app_user_model_id) {
-        return Some(finalize_candidate(
-            browser,
-            browser_executable_path,
-            registration,
-        ));
-    }
-
     if let Some(app_user_model_id) = app_user_model_id {
         if let Some(candidate) = candidates
             .iter()
@@ -105,7 +97,11 @@ pub fn resolve_browser_pwa(
             })
             .cloned()
         {
-            return Some(finalize_candidate(browser, browser_executable_path, candidate));
+            return Some(finalize_candidate(
+                browser,
+                browser_executable_path,
+                candidate,
+            ));
         }
 
         if let Some(app_id) = extract_app_id(app_user_model_id) {
@@ -113,9 +109,22 @@ pub fn resolve_browser_pwa(
                 .iter()
                 .find(|candidate| candidate.app_id.eq_ignore_ascii_case(&app_id))
                 .cloned()
-                .or_else(|| find_browser_registration(browser, &app_id))
             {
-                return Some(finalize_candidate(browser, browser_executable_path, candidate));
+                return Some(finalize_candidate(
+                    browser,
+                    browser_executable_path,
+                    candidate,
+                ));
+            }
+
+            if let Some(registration) =
+                resolve_from_app_user_model_id(browser, Some(app_user_model_id))
+            {
+                return Some(finalize_candidate(
+                    browser,
+                    browser_executable_path,
+                    registration,
+                ));
             }
         }
     }
@@ -125,7 +134,11 @@ pub fn resolve_browser_pwa(
         .find(|candidate| title_matches_pwa(window_title, &candidate.display_name))
         .cloned()
     {
-        return Some(finalize_candidate(browser, browser_executable_path, candidate));
+        return Some(finalize_candidate(
+            browser,
+            browser_executable_path,
+            candidate,
+        ));
     }
 
     let mut seen_ids: HashSet<String> = candidates
@@ -154,23 +167,14 @@ pub fn is_pwa_identifier(identifier: &str) -> bool {
 
 pub fn display_name_for_identifier(identifier: &str) -> Option<String> {
     let parsed = parse_pwa_identifier(identifier)?;
-    find_pwa_metadata(parsed.browser, &parsed.app_id)
+    find_pwa_metadata_for_profile(parsed.browser, &parsed.profile, &parsed.app_id)
         .map(|candidate| candidate.display_name)
         .filter(|name| !name.trim().is_empty())
 }
 
-pub fn browser_executable_for_identifier(identifier: &str) -> Option<String> {
-    let parsed = parse_pwa_identifier(identifier)?;
-    Some(
-        resolve_browser_executable(parsed.browser)
-            .map(|path| path.to_string_lossy().to_string())
-            .unwrap_or_else(|| parsed.browser.process_name().to_string()),
-    )
-}
-
 pub fn icon_path_for_identifier(identifier: &str) -> Option<PathBuf> {
     let parsed = parse_pwa_identifier(identifier)?;
-    find_pwa_metadata(parsed.browser, &parsed.app_id)?.icon_path
+    find_pwa_metadata_for_profile(parsed.browser, &parsed.profile, &parsed.app_id)?.icon_path
 }
 
 pub fn encode_png_icon(path: &Path) -> Option<String> {
@@ -193,13 +197,14 @@ fn resolve_from_app_user_model_id(
 ) -> Option<PwaCandidate> {
     let app_user_model_id = app_user_model_id?;
     let app_id = extract_app_id(app_user_model_id)?;
-    let mut candidate = find_browser_registration(browser, &app_id).unwrap_or_else(|| PwaCandidate {
-        display_name: app_id.clone(),
-        app_id: app_id.clone(),
-        profile: profile_from_app_user_model_id(app_user_model_id, &app_id),
-        icon_path: None,
-        app_user_model_id: Some(app_user_model_id.to_string()),
-    });
+    let mut candidate =
+        find_browser_registration(browser, &app_id).unwrap_or_else(|| PwaCandidate {
+            display_name: app_id.clone(),
+            app_id: app_id.clone(),
+            profile: profile_from_app_user_model_id(app_user_model_id, &app_id),
+            icon_path: None,
+            app_user_model_id: Some(app_user_model_id.to_string()),
+        });
 
     if candidate.profile.is_none() {
         candidate.profile = profile_from_app_user_model_id(app_user_model_id, &app_id);
@@ -213,7 +218,10 @@ fn finalize_candidate(
     _browser_executable_path: &str,
     mut candidate: PwaCandidate,
 ) -> BrowserPwa {
-    let profile = candidate.profile.take().unwrap_or_else(|| "Default".to_string());
+    let profile = candidate
+        .profile
+        .take()
+        .unwrap_or_else(|| "Default".to_string());
     BrowserPwa {
         display_name: clean_display_name(&candidate.display_name),
         stable_identifier: make_pwa_identifier(browser, &profile, &candidate.app_id),
@@ -232,6 +240,7 @@ fn make_pwa_identifier(browser: BrowserKind, profile: &str, app_id: &str) -> Str
 
 struct ParsedPwaIdentifier {
     browser: BrowserKind,
+    profile: String,
     app_id: String,
 }
 
@@ -239,12 +248,16 @@ fn parse_pwa_identifier(identifier: &str) -> Option<ParsedPwaIdentifier> {
     let rest = identifier.strip_prefix(PWA_SCHEME)?;
     let mut parts = rest.split('/');
     let browser = BrowserKind::from_slug(parts.next()?)?;
-    let _profile = parts.next()?;
+    let profile = urlencoding::decode(parts.next()?).ok()?.to_string();
     let app_id = parts.next()?.split('?').next()?.to_lowercase();
     if !is_chromium_app_id(&app_id) {
         return None;
     }
-    Some(ParsedPwaIdentifier { browser, app_id })
+    Some(ParsedPwaIdentifier {
+        browser,
+        profile,
+        app_id,
+    })
 }
 
 fn collect_start_menu_candidates(browser: BrowserKind) -> Vec<PwaCandidate> {
@@ -368,11 +381,49 @@ fn find_browser_registration(browser: BrowserKind, app_id: &str) -> Option<PwaCa
         .find(|candidate| candidate.app_id.eq_ignore_ascii_case(app_id))
 }
 
-fn find_pwa_metadata(browser: BrowserKind, app_id: &str) -> Option<PwaCandidate> {
-    collect_start_menu_candidates(browser)
+fn find_pwa_metadata_for_profile(
+    browser: BrowserKind,
+    profile: &str,
+    app_id: &str,
+) -> Option<PwaCandidate> {
+    let profile_matches = |candidate: &PwaCandidate| {
+        candidate
+            .profile
+            .as_deref()
+            .map(|candidate_profile| candidate_profile.eq_ignore_ascii_case(profile))
+            .unwrap_or(false)
+    };
+
+    let mut candidates = collect_start_menu_candidates(browser);
+    if let Some(candidate) = candidates
+        .iter()
+        .find(|candidate| {
+            candidate.app_id.eq_ignore_ascii_case(app_id) && profile_matches(candidate)
+        })
+        .cloned()
+    {
+        return Some(candidate);
+    }
+    if let Some(candidate) = candidates
+        .drain(..)
+        .find(|candidate| candidate.app_id.eq_ignore_ascii_case(app_id))
+    {
+        return Some(candidate);
+    }
+
+    let registrations = collect_browser_registrations(browser);
+    if let Some(candidate) = registrations
+        .iter()
+        .find(|candidate| {
+            candidate.app_id.eq_ignore_ascii_case(app_id) && profile_matches(candidate)
+        })
+        .cloned()
+    {
+        return Some(candidate);
+    }
+    registrations
         .into_iter()
         .find(|candidate| candidate.app_id.eq_ignore_ascii_case(app_id))
-        .or_else(|| find_browser_registration(browser, app_id))
 }
 
 fn collect_manifest_candidates(
@@ -497,42 +548,14 @@ fn collect_icon_files(dir: &Path, best: &mut Option<(u64, PathBuf)>, depth: usiz
         }
 
         let size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-        if best.as_ref().map(|(best_size, _)| size > *best_size).unwrap_or(true) {
+        if best
+            .as_ref()
+            .map(|(best_size, _)| size > *best_size)
+            .unwrap_or(true)
+        {
             *best = Some((size, path));
         }
     }
-}
-
-fn resolve_browser_executable(browser: BrowserKind) -> Option<PathBuf> {
-    let candidates = match browser {
-        BrowserKind::Chrome => vec![
-            env_path("PROGRAMFILES", r"Google\Chrome\Application\chrome.exe"),
-            env_path("PROGRAMFILES(X86)", r"Google\Chrome\Application\chrome.exe"),
-            env_path("LOCALAPPDATA", r"Google\Chrome\Application\chrome.exe"),
-        ],
-        BrowserKind::Edge => vec![
-            env_path("PROGRAMFILES(X86)", r"Microsoft\Edge\Application\msedge.exe"),
-            env_path("PROGRAMFILES", r"Microsoft\Edge\Application\msedge.exe"),
-            env_path("LOCALAPPDATA", r"Microsoft\Edge\Application\msedge.exe"),
-        ],
-        BrowserKind::Brave => vec![
-            env_path("PROGRAMFILES", r"BraveSoftware\Brave-Browser\Application\brave.exe"),
-            env_path(
-                "PROGRAMFILES(X86)",
-                r"BraveSoftware\Brave-Browser\Application\brave.exe",
-            ),
-            env_path("LOCALAPPDATA", r"BraveSoftware\Brave-Browser\Application\brave.exe"),
-        ],
-    };
-
-    candidates
-        .into_iter()
-        .flatten()
-        .find(|candidate| candidate.exists())
-}
-
-fn env_path(env: &str, suffix: &str) -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os(env)?).join(suffix))
 }
 
 fn looks_like_chromium_profile(path: &Path) -> bool {
@@ -661,10 +684,7 @@ fn icon_path_from_string(value: &str) -> Option<PathBuf> {
     let index = lower.find(".ico").or_else(|| lower.find(".png"))?;
     let end = index + 4;
     let before = &value[..end];
-    let start = before
-        .rfind(|c| c == '"' || c == '\0')
-        .map(|pos| pos + 1)
-        .unwrap_or(0);
+    let start = before.rfind(['"', '\0']).map(|pos| pos + 1).unwrap_or(0);
     let candidate = before[start..].trim();
     if candidate.is_empty() {
         None
@@ -755,6 +775,9 @@ mod tests {
     fn title_heuristic_requires_close_match() {
         assert!(title_matches_pwa("YouTube", "YouTube"));
         assert!(title_matches_pwa("YouTube - Google Chrome", "YouTube"));
-        assert!(!title_matches_pwa("Inbox - Gmail - Google Chrome", "YouTube"));
+        assert!(!title_matches_pwa(
+            "Inbox - Gmail - Google Chrome",
+            "YouTube"
+        ));
     }
 }

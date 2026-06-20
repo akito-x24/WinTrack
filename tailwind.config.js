@@ -6,7 +6,7 @@ export default {
     extend: {
       colors: {
         // WinTrack design tokens
-        fp: {
+        wt: {
           bg: "#0d0f14",
           surface: "#13161e",
           card: "#1a1e28",

@@ -1,6 +1,6 @@
-use crate::services::AppState;
 #[cfg(target_os = "windows")]
 use crate::browser_pwa::{resolve_browser_pwa, BrowserKind};
+use crate::services::AppState;
 use chrono::Local;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -12,6 +12,9 @@ use tauri_plugin_notification::NotificationExt;
 use windows::{
     core::{PCWSTR, PWSTR},
     Win32::Foundation::{CloseHandle, PROPERTYKEY},
+    Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    },
     Win32::System::Com::StructuredStorage::PropVariantToString,
     Win32::System::SystemInformation::GetTickCount,
     Win32::System::Threading::{
@@ -33,6 +36,15 @@ pub struct ForegroundApp {
     pub executable_path: String,
     pub window_title: String,
     pub process_name: String,
+    pub monitor_bounds: Option<MonitorBounds>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MonitorBounds {
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 #[cfg(target_os = "windows")]
@@ -77,9 +89,10 @@ pub fn get_foreground_app() -> Option<ForegroundApp> {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| executable_path.clone());
+        let app_user_model_id = get_window_app_user_model_id(hwnd);
+        let monitor_bounds = get_window_monitor_bounds(hwnd);
 
         if let Some(browser) = BrowserKind::from_process_name(&exe_name) {
-            let app_user_model_id = get_window_app_user_model_id(hwnd);
             if let Some(pwa) = resolve_browser_pwa(
                 browser,
                 &executable_path,
@@ -91,22 +104,53 @@ pub fn get_foreground_app() -> Option<ForegroundApp> {
                     executable_path: pwa.stable_identifier,
                     window_title,
                     process_name: exe_name,
+                    monitor_bounds,
                 });
             }
         }
 
-        let (app_name, executable_path) = if is_uwp_host_process(&exe_name) {
-            resolve_uwp_foreground_app(hwnd, &window_title)
-                .unwrap_or((exe_name.clone(), executable_path.clone()))
-        } else {
-            (exe_name.clone(), executable_path.clone())
-        };
+        let (app_name, executable_path) =
+            if is_uwp_host_process(&exe_name) || is_windows_apps_path(&executable_path) {
+                resolve_uwp_foreground_app(app_user_model_id.as_deref(), &window_title)
+                    .unwrap_or((exe_name.clone(), executable_path.clone()))
+            } else {
+                (exe_name.clone(), executable_path.clone())
+            };
 
         Some(ForegroundApp {
             app_name,
             executable_path,
             window_title,
             process_name: exe_name,
+            monitor_bounds,
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_window_monitor_bounds(hwnd: windows::Win32::Foundation::HWND) -> Option<MonitorBounds> {
+    unsafe {
+        let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if monitor.0.is_null() {
+            return None;
+        }
+
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            rcMonitor: Default::default(),
+            rcWork: Default::default(),
+            dwFlags: 0,
+        };
+
+        if !GetMonitorInfoW(monitor, &mut info).as_bool() {
+            return None;
+        }
+
+        Some(MonitorBounds {
+            x: info.rcMonitor.left,
+            y: info.rcMonitor.top,
+            width: info.rcMonitor.right - info.rcMonitor.left,
+            height: info.rcMonitor.bottom - info.rcMonitor.top,
         })
     }
 }
@@ -120,23 +164,40 @@ fn is_uwp_host_process(exe_name: &str) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn resolve_uwp_foreground_app(hwnd: windows::Win32::Foundation::HWND, window_title: &str) -> Option<(String, String)> {
+fn is_windows_apps_path(executable_path: &str) -> bool {
+    executable_path
+        .to_lowercase()
+        .contains(r"\program files\windowsapps\")
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_uwp_foreground_app(
+    app_user_model_id: Option<&str>,
+    window_title: &str,
+) -> Option<(String, String)> {
     // UWP and packaged apps are often hosted by a generic Win32 process such as
     // ApplicationFrameHost.exe or RuntimeBroker.exe. The window itself carries
     // a package identity via Shell properties, which allows us to map the
     // foreground window back to the real app.
-    let app_user_model_id = get_window_app_user_model_id(hwnd)?;
-    if app_user_model_id.is_empty() {
+    let app_user_model_id = app_user_model_id?.trim();
+    if !is_packaged_app_user_model_id(app_user_model_id) {
         return None;
     }
 
     let app_name = if !window_title.trim().is_empty() {
         window_title.to_string()
     } else {
-        app_user_model_id.clone()
+        app_user_model_id.to_string()
     };
 
-    Some((app_name, app_user_model_id))
+    Some((app_name, app_user_model_id.to_string()))
+}
+
+#[cfg(target_os = "windows")]
+fn is_packaged_app_user_model_id(app_user_model_id: &str) -> bool {
+    app_user_model_id.contains('!')
+        && !app_user_model_id.contains('\\')
+        && !app_user_model_id.contains('/')
 }
 
 #[cfg(target_os = "windows")]
@@ -149,8 +210,11 @@ fn get_window_app_user_model_id(hwnd: windows::Win32::Foundation::HWND) -> Optio
             .encode_utf16()
             .chain(std::iter::once(0))
             .collect();
-        PSGetPropertyKeyFromName(PCWSTR(app_user_model_id_name.as_ptr()), &mut app_user_model_key)
-            .ok()?;
+        PSGetPropertyKeyFromName(
+            PCWSTR(app_user_model_id_name.as_ptr()),
+            &mut app_user_model_key,
+        )
+        .ok()?;
 
         let propvar = property_store.GetValue(&app_user_model_key).ok()?;
         let mut buffer = [0u16; 512];
@@ -172,6 +236,7 @@ pub fn get_foreground_app() -> Option<ForegroundApp> {
         executable_path: "/usr/bin/wintrack-dev".to_string(),
         window_title: "WinTrack Development".to_string(),
         process_name: "wintrack-dev".to_string(),
+        monitor_bounds: None,
     })
 }
 
@@ -299,7 +364,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
 
             if !is_idle {
                 if let (Some(app), Some(start)) = (&current_app, &session_start) {
-                    if let Ok(s) = state.lock() {
+                    if let Ok(mut s) = state.lock() {
                         if let Ok((app_id, is_ignored)) =
                             s.db.upsert_app(&app.app_name, &app.executable_path)
                         {
@@ -311,14 +376,17 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                 {
                                     let total_usage = today_usage + current_session_seconds;
 
+                                    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                                    s.retain_soft_lock_day(&today);
+
                                     let limit_seconds = daily_limit * 60;
+                                    let effective_limit_seconds = limit_seconds
+                                        + s.soft_lock_extension_seconds(app_id, &today);
                                     if total_usage >= limit_seconds {
                                         let display_name =
-                                            s.db.get_app_display_name(app_id)
+                                            s.db.get_app_soft_lock_details(app_id)
+                                                .map(|(name, _)| name)
                                                 .unwrap_or_else(|_| app.app_name.clone());
-
-                                        let today =
-                                            chrono::Local::now().format("%Y-%m-%d").to_string();
 
                                         if s.db
                                             .should_send_limit_notification(app_id, &today)
@@ -328,7 +396,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                                 .notification()
                                                 .builder()
                                                 .title("Daily Limit Reached")
-                                                .body(&format!(
+                                                .body(format!(
                                                     "{} has reached its daily limit.",
                                                     display_name
                                                 ))
@@ -365,64 +433,40 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
 
                                                     .title("Reminder")
 
-                                                    .body(&format!(
-
+                                                    .body(format!(
                                                         "You're still using {} after exceeding its limit.",
-
-                                                            display_name
-
-                                                        ))
+                                                        display_name
+                                                    ))
 
                                                     .show();
 
                                             let _ = s.db.mark_reminder_sent(app_id, total_usage);
 
                                             println!("REAL-TIME REMINDER: {}", display_name);
+                                        }
 
-                                            if s.db.is_soft_lock_enabled(app_id).unwrap_or(false) {
-                                                let _ = s.db.increment_soft_lock_counter(app_id);
+                                        if total_usage >= effective_limit_seconds
+                                            && s.db.is_soft_lock_enabled(app_id).unwrap_or(false)
+                                            && !s.has_active_soft_lock(app_id)
+                                            && handle.get_webview_window("soft-lock").is_none()
+                                            && s.mark_soft_lock_active(app_id)
+                                        {
+                                            println!("SOFT LOCK TRIGGERED: {}", display_name);
 
-                                                if let Ok(count) =
-                                                    s.db.get_soft_lock_counter(app_id)
-                                                {
-                                                    println!(
-                                                        "SOFT LOCK COUNT: {} -> {}",
-                                                        display_name, count
-                                                    );
+                                            let result = open_soft_lock_window(
+                                                &handle,
+                                                app_id,
+                                                &display_name,
+                                                &app.process_name,
+                                                total_usage,
+                                                limit_seconds,
+                                                app.monitor_bounds,
+                                            );
 
-                                                    const SOFT_LOCK_TRIGGER_REMINDERS: i64 = 1;
-
-                                                    if count >= SOFT_LOCK_TRIGGER_REMINDERS {
-                                                        println!(
-                                                            "SOFT LOCK TRIGGERED: {}",
-                                                            display_name
-                                                        );
-
-                                                        if handle
-                                                            .get_webview_window("soft-lock")
-                                                            .is_none()
-                                                        {
-                                                            let url = format!(
-                                                                "/?softlock=1&app={}&process={}",
-                                                                urlencoding::encode(&display_name),
-                                                                urlencoding::encode(&app.process_name)
-                                                            );
-
-                                                            let _ = WebviewWindowBuilder::new(
-                                                                &handle,
-                                                                "soft-lock",
-                                                                tauri::WebviewUrl::App(url.into()),
-                                                            )
-                                                            .inner_size(1280.0, 720.0)
-                                                            .resizable(true)
-                                                            .center()
-                                                            .build();
-                                                        }
-
-                                                        let _ =
-                                                            s.db.reset_soft_lock_counter(app_id);
-                                                    }
-                                                }
+                                            if result.is_err() {
+                                                s.clear_soft_lock_active(app_id);
+                                            } else {
+                                                let _ = s.db.reset_soft_lock_counter(app_id);
                                             }
                                         }
                                     }
@@ -451,6 +495,51 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
             }
         }
     });
+}
+
+fn open_soft_lock_window(
+    handle: &AppHandle,
+    app_id: i64,
+    app_name: &str,
+    process_name: &str,
+    current_usage_seconds: i64,
+    daily_limit_seconds: i64,
+    monitor_bounds: Option<MonitorBounds>,
+) -> tauri::Result<()> {
+    let url = format!(
+        "/?softlock=1&appId={}&app={}&process={}&currentUsage={}&dailyLimit={}",
+        app_id,
+        urlencoding::encode(app_name),
+        urlencoding::encode(process_name),
+        current_usage_seconds,
+        daily_limit_seconds
+    );
+
+    let mut builder =
+        WebviewWindowBuilder::new(handle, "soft-lock", tauri::WebviewUrl::App(url.into()))
+            .title("WinTrack Soft Lock")
+            .decorations(false)
+            .resizable(false)
+            .maximizable(false)
+            .minimizable(false)
+            .always_on_top(true)
+            .visible_on_all_workspaces(true)
+            .focused(true)
+            .visible(true);
+
+    if let Some(bounds) = monitor_bounds {
+        builder = builder
+            .position(bounds.x as f64, bounds.y as f64)
+            .inner_size(bounds.width as f64, bounds.height as f64);
+    } else {
+        builder = builder.inner_size(1280.0, 720.0).center();
+    }
+
+    let window = builder.fullscreen(true).build()?;
+    let _ = window.show();
+    let _ = window.set_focus();
+
+    Ok(())
 }
 
 fn flush_session(

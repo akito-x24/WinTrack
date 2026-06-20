@@ -63,6 +63,13 @@ const CATEGORY_SHADES: Record<string, string[]> = {
     "#FFE0CC",
   ],
 
+  Tools: [
+    "#2DD4BF",
+    "#5EEAD4",
+    "#99F6E4",
+    "#CCFBF1",
+  ],
+
   Other: [
     "#B1BDCC",
     "#CBD5E1",
@@ -77,7 +84,7 @@ export default function CategoryPieChart({
 }: Props) {
   if (!categories || categories.length === 0) {
     return (
-      <div className="flex items-center justify-center h-48 text-fp-muted text-sm">
+      <div className="flex items-center justify-center h-48 text-wt-muted text-sm">
         No data
       </div>
     );
@@ -128,7 +135,7 @@ export default function CategoryPieChart({
     if (!active || !payload?.length) return null;
 
     return (
-      <div className="bg-fp-card border border-fp-border rounded-lg px-3 py-2">
+      <div className="bg-wt-card border border-wt-border rounded-lg px-3 py-2">
         <div className="flex items-center gap-2">
           {payload[0].payload.iconData && (
             <AppIcon
@@ -137,11 +144,11 @@ export default function CategoryPieChart({
               className="w-5 h-5"
             />
           )}
-          <p className="text-xs font-medium text-fp-text">
+          <p className="text-xs font-medium text-wt-text">
             {payload[0].name}
           </p>
         </div>
-        <p className="text-xs text-fp-muted">
+        <p className="text-xs text-wt-muted">
           {formatDuration(payload[0].value)}
         </p>
       </div>

@@ -21,35 +21,35 @@ export default function TimelineView() {
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Date nav */}
       <div className="flex items-center gap-3">
-        <button onClick={() => changeDate(subtractDays(date, 1))} className="fp-btn-ghost px-2">←</button>
+        <button onClick={() => changeDate(subtractDays(date, 1))} className="wt-btn-ghost px-2">←</button>
         <input
           type="date"
           value={date}
           max={todayString()}
           onChange={e => changeDate(e.target.value)}
-          className="bg-fp-card border border-fp-border text-fp-text text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-fp-accent"
+          className="bg-wt-card border border-wt-border text-wt-text text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-wt-accent"
         />
         <button
           onClick={() => { if (date < todayString()) changeDate(subtractDays(date, -1)); }}
           disabled={date >= todayString()}
-          className="fp-btn-ghost px-2"
+          className="wt-btn-ghost px-2"
         >→</button>
-        <button onClick={() => changeDate(todayString())} className="fp-btn-ghost text-xs">Today</button>
+        <button onClick={() => changeDate(todayString())} className="wt-btn-ghost text-xs">Today</button>
       </div>
 
       {loading ? <LoadingSpinner /> : timeline?.sessions.length ? (
-        <div className="fp-card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-fp-border fp-label">
+        <div className="wt-card p-0 overflow-hidden">
+          <div className="px-5 py-4 border-b border-wt-border wt-label">
             {timeline.sessions.length} sessions
           </div>
-          <div className="divide-y divide-fp-border/40 max-h-[600px] overflow-y-auto">
+          <div className="divide-y divide-wt-border/40 max-h-[600px] overflow-y-auto">
             {timeline.sessions.map((s, i) => (
               <SessionRow key={i} session={s} />
             ))}
           </div>
         </div>
       ) : (
-        <div className="fp-card text-center py-12 text-fp-muted text-sm">
+        <div className="wt-card text-center py-12 text-wt-muted text-sm">
           No sessions recorded for {date}
         </div>
       )}
@@ -63,7 +63,7 @@ function SessionRow({ session }: { session: UsageSession }) {
   return (
     <div className={`flex items-start gap-4 px-5 py-3 ${session.was_idle ? "opacity-40" : ""}`}>
       {/* Time */}
-      <div className="text-xs font-mono text-fp-muted w-12 shrink-0 mt-0.5">
+      <div className="text-xs font-mono text-wt-muted w-12 shrink-0 mt-0.5">
         {formatTime(session.start_time)}
       </div>
       {/* Color bar */}
@@ -76,20 +76,20 @@ function SessionRow({ session }: { session: UsageSession }) {
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <span className="text-sm font-medium text-fp-text">
+          <span className="text-sm font-medium text-wt-text">
             {session.app_name.replace(/\.exe$/i, "")}
           </span>
           {session.was_idle && (
-            <span className="text-[10px] text-fp-muted bg-fp-border px-1.5 py-0.5 rounded">idle</span>
+            <span className="text-[10px] text-wt-muted bg-wt-border px-1.5 py-0.5 rounded">idle</span>
           )}
           <CategoryBadge category={session.category} />
         </div>
         {session.window_title && (
-          <div className="text-xs text-fp-muted truncate">{session.window_title}</div>
+          <div className="text-xs text-wt-muted truncate">{session.window_title}</div>
         )}
       </div>
       {/* Duration */}
-      <div className="text-xs text-fp-muted shrink-0 mt-0.5">
+      <div className="text-xs text-wt-muted shrink-0 mt-0.5">
         {formatDuration(session.duration_seconds)}
       </div>
     </div>

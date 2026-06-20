@@ -52,24 +52,24 @@ export default function WeeklyAnalytics() {
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Week nav */}
       <div className="flex items-center justify-between">
-        <button onClick={prevWeek} className="fp-btn-ghost px-2">←</button>
-        <span className="text-sm font-medium text-fp-text">
+        <button onClick={prevWeek} className="wt-btn-ghost px-2">←</button>
+        <span className="text-sm font-medium text-wt-text">
           Week of {new Date(weekStart + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}
         </span>
         <div className="flex items-center gap-2">
           <button
             onClick={nextWeek}
             disabled={weekStart >= getWeekStart()}
-            className="fp-btn-ghost px-2 disabled:opacity-40"
+            className="wt-btn-ghost px-2 disabled:opacity-40"
           >→</button>
-          <button onClick={() => setWeekStart(getWeekStart())} className="fp-btn-ghost text-xs">
+          <button onClick={() => setWeekStart(getWeekStart())} className="wt-btn-ghost text-xs">
             This Week
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="fp-card flex justify-center py-12"><LoadingSpinner /></div>
+        <div className="wt-card flex justify-center py-12"><LoadingSpinner /></div>
       ) : (
         <>
           {/* Summary cards */}
@@ -82,14 +82,14 @@ export default function WeeklyAnalytics() {
           </div>
 
           {/* Chart - always shows all 7 days */}
-          <div className="fp-card">
+          <div className="wt-card">
             <SectionHeader title="Daily Activity" />
             <WeeklyBarChart data={fullWeek} />
           </div>
 
           {/* Top apps - only show if there's actual data */}
           {stats?.top_apps && stats.top_apps.length > 0 && (
-            <div className="fp-card">
+            <div className="wt-card">
               <SectionHeader title="Top Apps This Week" />
               <div className="space-y-2">
                 {stats.top_apps.slice(0, 6).map((app, i) => (
@@ -110,8 +110,8 @@ export default function WeeklyAnalytics() {
 
           {/* Empty state - only shown when zero activity all week */}
           {totalActive === 0 && (
-            <div className="fp-card flex flex-col items-center justify-center py-10 text-center">
-              <p className="text-fp-muted text-sm">No activity recorded this week yet</p>
+            <div className="wt-card flex flex-col items-center justify-center py-10 text-center">
+              <p className="text-wt-muted text-sm">No activity recorded this week yet</p>
             </div>
           )}
         </>

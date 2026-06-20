@@ -36,9 +36,9 @@ export default function MonthlyAnalytics() {
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
       {/* Month nav */}
       <div className="flex items-center gap-3">
-        <button onClick={prevMonth} className="fp-btn-ghost px-2">←</button>
-        <span className="text-sm text-fp-text font-medium">{MONTH_NAMES[month - 1]} {year}</span>
-        <button onClick={nextMonth} className="fp-btn-ghost px-2">→</button>
+        <button onClick={prevMonth} className="wt-btn-ghost px-2">←</button>
+        <span className="text-sm text-wt-text font-medium">{MONTH_NAMES[month - 1]} {year}</span>
+        <button onClick={nextMonth} className="wt-btn-ghost px-2">→</button>
       </div>
 
       {loading ? <LoadingSpinner /> : stats ? (
@@ -50,7 +50,7 @@ export default function MonthlyAnalytics() {
           </div>
 
           {/* Calendar heatmap */}
-          <div className="fp-card">
+          <div className="wt-card">
             <SectionHeader title="Monthly Calendar" />
             <CalendarHeatmap days={stats.days} year={year} month={month} maxDay={maxDay} />
           </div>
@@ -88,7 +88,7 @@ function CalendarHeatmap({
     <div>
       <div className="grid grid-cols-7 gap-1 mb-2">
         {DOW.map(d => (
-          <div key={d} className="text-[10px] text-fp-muted text-center">{d}</div>
+          <div key={d} className="text-[10px] text-wt-muted text-center">{d}</div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
@@ -104,7 +104,7 @@ function CalendarHeatmap({
             >
               <span className="text-[10px] text-white/50">{day}</span>
               {secs > 0 && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-fp-card border border-fp-border rounded px-2 py-1 text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-wt-card border border-wt-border rounded px-2 py-1 text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                   {formatDuration(secs)}
                 </div>
               )}

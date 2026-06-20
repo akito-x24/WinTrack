@@ -4,7 +4,9 @@ pub fn handle_tray_event(app: &AppHandle, id: &str) {
     match id {
         "open" => open_or_focus_window(app),
         "pause" => {
-            if let Some(state) = app.try_state::<std::sync::Arc<std::sync::Mutex<crate::services::AppState>>>() {
+            if let Some(state) =
+                app.try_state::<std::sync::Arc<std::sync::Mutex<crate::services::AppState>>>()
+            {
                 if let Ok(mut s) = state.lock() {
                     s.paused = true;
                     log::info!("Tracking paused from tray");
@@ -12,7 +14,9 @@ pub fn handle_tray_event(app: &AppHandle, id: &str) {
             }
         }
         "resume" => {
-            if let Some(state) = app.try_state::<std::sync::Arc<std::sync::Mutex<crate::services::AppState>>>() {
+            if let Some(state) =
+                app.try_state::<std::sync::Arc<std::sync::Mutex<crate::services::AppState>>>()
+            {
                 if let Ok(mut s) = state.lock() {
                     s.paused = false;
                     log::info!("Tracking resumed from tray");
