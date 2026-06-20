@@ -5,20 +5,18 @@ import WeeklyBarChart from "../components/charts/WeeklyBarChart";
 import { formatDuration, getWeekStart, subtractDays } from "../utils/helpers";
 import type { WeeklyStats, DayStats } from "../types";
 
-// Always return exactly 7 DayStats entries for the week starting at weekStart,
-// filling in zeroes for days with no data.
 function buildFullWeek(weekStart: string, stats: WeeklyStats | null): DayStats[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart + "T12:00:00");
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().split("T")[0];
+    const dateStr = d.toLocaleDateString("en-CA");
     const existing = stats?.days.find(x => x.date === dateStr);
     return existing ?? {
       date: dateStr,
       active_seconds: 0,
       idle_seconds: 0,
     };
-  });
+  }); 
 }
 
 export default function WeeklyAnalytics() {

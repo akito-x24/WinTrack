@@ -3,7 +3,7 @@ import {
   StatCard,
   AppRow,
   SectionHeader,
-  EmptyState,
+  EmptyState, 
   LoadingSpinner,
 } from "../components/ui";
 import CategoryPieChart from "../components/charts/CategoryPieChart";
@@ -20,7 +20,7 @@ export default function Dashboard() {
   const today = todayString();
 
   return (
-    <div className="space-y-6 max-w-7xl animate-slide-up">
+    <div className="space-y-6 max-w-7xl">
       {/* Top stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -109,7 +109,7 @@ export default function Dashboard() {
                 i
             );
 
-            const dateStr = d.toISOString().split("T")[0];
+            const dateStr = d.toLocaleDateString("en-CA");
             const existing = weeklyStats?.days.find(
               (x) => x.date === dateStr
             );

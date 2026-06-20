@@ -19,7 +19,7 @@ export interface App {
 
 export type AppCategory =
   | "Productive"
-  | "Entertainment"
+  | "Entertainment" 
   | "Social"
   | "Gaming"
   | "Development"
@@ -106,10 +106,10 @@ export interface CurrentSession {
 
 export const CATEGORY_COLORS: Record<AppCategory, string> = {
   Development: "#0066FF",   // Electric Blue
-  Productive: "#FFB000",    // Neon Cyan
+  Productive: "#FFB000",    // Amber
   Study: "#8B5CF6",         // Purple
   Social: "#FF2EA6",        // Neon Pink
-  Entertainment: "#00E5FF", // Gold
+  Entertainment: "#00E5FF", // Cyan
   Gaming: "#FF4D00",        // Orange-Red
   Tools: "#14B8A6",         // Teal
   Other: "#94A3B8",         // Slate

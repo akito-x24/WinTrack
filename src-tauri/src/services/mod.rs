@@ -1,6 +1,19 @@
 use crate::database::Database;
+use crate::monitoring::ForegroundApp;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
+
+/// Mirrors the monitoring loop's in-progress session so it can be flushed
+/// to the database from outside the monitoring thread (e.g. when the user
+/// exits from the tray, or on app shutdown). Kept in sync by the monitoring
+/// loop on every tick where the foreground app changes.
+#[derive(Clone)]
+pub struct PendingSession {
+    pub app: ForegroundApp,
+    pub started_at: Instant,
+    pub started_at_str: String,
+}
 
 pub struct AppState {
     pub db: Database,
@@ -10,6 +23,7 @@ pub struct AppState {
     pub is_idle: bool,
     pub soft_lock_extensions: HashMap<(i64, String), i64>,
     pub active_soft_lock_app_ids: HashSet<i64>,
+    pub pending_session: Option<PendingSession>,
 }
 
 impl AppState {
@@ -62,6 +76,7 @@ pub fn init_app_state() -> Result<AppState> {
         is_idle: false,
         soft_lock_extensions: HashMap::new(),
         active_soft_lock_app_ids: HashSet::new(),
+        pending_session: None,
     })
 }
 

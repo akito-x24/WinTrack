@@ -229,8 +229,35 @@ async fn get_timeline(
     state.db.get_timeline(&date).map_err(|e| e.to_string())
 }
 
+/// Closes the target of a soft lock's "Close App" action.
+///
+/// For ordinary Win32/UWP apps this still uses `taskkill /IM`, matching prior
+/// behavior. For browser PWAs, `taskkill /IM` would kill the entire browser -
+/// every window, tab, and profile - just because one PWA hit its limit. So for
+/// PWAs we instead locate and close only the specific window(s) belonging to
+/// that PWA. If no matching window can be found, we return an error and do
+/// NOT fall back to killing the browser process; the soft-lock UI is expected
+/// to treat that as "could not auto-close" and simply leave the warning in
+/// place rather than taking a destructive action on the wrong target.
 #[tauri::command]
-async fn close_process(process_name: String) -> Result<(), String> {
+async fn close_process(identifier: String, process_name: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        if browser_pwa::is_pwa_identifier(&identifier) {
+            let closed = monitoring::close_browser_pwa_windows(&identifier, &process_name)
+                .map_err(|e| e.to_string())?;
+
+            return if closed {
+                Ok(())
+            } else {
+                Err(format!(
+                    "Could not safely locate the window for this PWA; refusing to close the entire '{}' process.",
+                    process_name
+                ))
+            };
+        }
+    }
+
     std::process::Command::new("taskkill")
         .args(["/F", "/T", "/IM", &process_name])
         .output()
@@ -361,15 +388,23 @@ pub fn run() {
                 .build(app)?;
 
             if let Some(window) = app.get_webview_window("main") {
-                let start_minimized = state_for_monitor
-                    .lock()
-                    .ok()
-                    .and_then(|s| s.db.get_settings().ok())
-                    .and_then(|v| v.get("start_minimized").and_then(|x| x.as_bool()))
-                    .unwrap_or(false);
+                // The window is created hidden (tauri.conf.json: "visible": false)
+                // specifically so we never have to show-then-hide it - that brief
+                // flash is what made launches look like a crash. Instead we decide
+                // up front whether to show it at all, based on how WinTrack was
+                // launched:
+                //
+                //   - Autostart (Windows passed our "--hidden" CLI flag, registered
+                //     via tauri_plugin_autostart below): never show the window.
+                //   - Manual launch (double-click, Start Menu, desktop shortcut):
+                //     always show the window. This is intentional even if "Start
+                //     Minimized" is enabled - that setting now governs autostart
+                //     visibility, not manual launches, per product requirements.
+                let launched_via_autostart = std::env::args().any(|arg| arg == "--hidden");
 
-                if start_minimized {
-                    let _ = window.hide();
+                if !launched_via_autostart {
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
             }
 
@@ -431,8 +466,17 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("Error building WinTrack app")
-        .run(|_app, event| {
+        .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                // Flush whatever session is in progress first. This covers
+                // Windows logoff/shutdown, which surfaces here too - without
+                // this, a forced shutdown could drop the current session
+                // entirely since prevent_exit() alone does not persist it.
+                if let Some(state) =
+                    app.try_state::<Arc<Mutex<AppState>>>()
+                {
+                    monitoring::flush_session_for_exit(&state);
+                }
                 api.prevent_exit();
             }
         });

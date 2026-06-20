@@ -417,7 +417,9 @@ impl Database {
     }
 
     /// Set reminder interval in minutes for over-limit notifications.
+    /// 0 means "off" (no recurring reminder). Negative values are rejected.
     pub fn update_app_reminder_interval(&self, app_id: i64, interval_minutes: i64) -> Result<()> {
+        let interval_minutes = normalize_reminder_interval(interval_minutes)?;
         self.conn.execute(
             "UPDATE apps SET reminder_interval_minutes = ?1 WHERE id = ?2",
             params![interval_minutes, app_id],
@@ -1526,6 +1528,7 @@ fn auto_ignore_app(app_name: &str, exe_path: &str) -> bool {
     matches_any(
         &lower,
         &[
+            // Windows shell
             "explorer.exe",
             "searchhost.exe",
             "searchapp.exe",
@@ -1533,12 +1536,61 @@ fn auto_ignore_app(app_name: &str, exe_path: &str) -> bool {
             "widgets.exe",
             "lockapp.exe",
             "shellexperiencehost.exe",
-            "runtimebroker.exe",
             "startmenuexperiencehost.exe",
             "applicationframehost.exe",
+            // Windows services
+            "runtimebroker.exe",
+            "backgroundtaskhost.exe",
+            "dllhost.exe",
+            "taskhostw.exe",
+            "conhost.exe",
+            "ctfmon.exe",
+            "wermgr.exe",
+            "werfault.exe",
+            "fontdrvhost.exe",
+            // UI helpers
+            "openwith.exe",
+            "pickerhost.exe",
+            "searchindexer.exe",
+            "searchprotocolhost.exe",
+            "searchfilterhost.exe",
+            "useroobebroker.exe",
+            "oobenetworkconnectionflow.exe",
+            // System processes
             "dwm.exe",
+            "winlogon.exe",
+            "csrss.exe",
+            "smss.exe",
+            "services.exe",
+            "lsass.exe",
+            "system",
+            "system idle process",
+            // Defender
+            "securityhealthsystray.exe",
+            "securityhealthservice.exe",
+            "msmpeng.exe",
+            // Update services
+            "musnotification.exe",
+            "musnotificationux.exe",
+            "sihost.exe",
+            // Widgets / Copilot
+            "copilot.exe",
+            "widgetservice.exe",
+            // Windows notifications
+            "yourphone.exe",
+            "crossdevice.exe",
+            // Installer helpers
+            "setup.exe",
+            "unins000.exe",
+            // Crash dialogs
+            "consent.exe",
+            "wusa.exe",
         ],
     ) || path_lower.contains("\\windows\\systemapps\\")
+        || path_lower.contains("\\windowsapps\\microsoft.windows")
+        || path_lower.contains("\\windows\\immersivecontrolpanel\\")
+        || path_lower.contains("\\windows\\system32\\securityhealth")
+        || path_lower.contains("\\windows\\system32\\backgroundtaskhost")
 }
 
 fn normalize_daily_limit(limit_minutes: Option<i64>) -> Result<Option<i64>> {
@@ -1547,6 +1599,17 @@ fn normalize_daily_limit(limit_minutes: Option<i64>) -> Result<Option<i64>> {
         Some(minutes) if (15..=1440).contains(&minutes) && minutes % 15 == 0 => Ok(Some(minutes)),
         Some(_) => anyhow::bail!("Daily limit must be 0 or a 15-minute increment from 15 to 1440"),
     }
+}
+
+/// 0 disables the reminder. Anything else must be a positive number of
+/// minutes. Negative values are always rejected - they would otherwise make
+/// `should_send_reminder`'s `elapsed >= interval * 60` check trivially true
+/// on every poll, spamming reminders nonstop.
+fn normalize_reminder_interval(interval_minutes: i64) -> Result<i64> {
+    if interval_minutes < 0 {
+        anyhow::bail!("Reminder interval must be 0 (off) or a positive number of minutes");
+    }
+    Ok(interval_minutes)
 }
 
 fn get_file_description(exe_path: &str) -> Option<String> {

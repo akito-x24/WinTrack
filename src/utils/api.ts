@@ -36,11 +36,16 @@ export const api = {
   updateAppCategory: (app_id: number, category: string) => call<boolean>("update_app_category", { appId: app_id, category }),
   updateAppDisplayName: (app_id: number, display_name: string) => call<boolean>("update_app_display_name", { appId: app_id, displayName: display_name }),
   setAppIgnored: (app_id: number, ignored: boolean) => call<boolean>("set_app_ignored", { appId: app_id, ignored }),
-  updateAppReminderInterval: (app_id: number, interval_minutes: number) => call<boolean>("update_app_reminder_interval", { appId: app_id, intervalMinutes: interval_minutes }),
+  updateAppReminderInterval: (app_id: number, interval_minutes: number) => {
+    if (!Number.isFinite(interval_minutes) || interval_minutes < 0) {
+      return Promise.reject(new Error("Reminder interval must be 0 (off) or a positive number of minutes"));
+    }
+    return call<boolean>("update_app_reminder_interval", { appId: app_id, intervalMinutes: interval_minutes });
+  },
   updateAppSoftLockEnabled: (app_id: number, enabled: boolean) => call<boolean>("set_app_soft_lock_enabled", { appId: app_id, enabled }),
   updateAppDailyLimit: (app_id: number, limit_minutes: number | null) => call<boolean>("update_app_daily_limit", { appId: app_id, limitMinutes: limit_minutes }),
 
-  closeProcess: (process_name: string) => call<void>("close_process", { processName: process_name }),
+  closeProcess: (identifier: string, process_name: string) => call<void>("close_process", { identifier, processName: process_name }),
   grantAppMoreTime: (app_id: number) => call<void>("grant_app_more_time", { appId: app_id }),
   finishSoftLockWarning: (app_id: number) => call<void>("finish_soft_lock_warning", { appId: app_id }),
   getSoftLockAppDetails: (app_id: number) => call<{ display_name: string; icon_data?: string | null }>("get_soft_lock_app_details", { appId: app_id }),
@@ -55,7 +60,7 @@ export const api = {
 
   exportData: (format: string, start_date: string, end_date: string, output_path: string) => call<string>("export_data", { format, startDate: start_date, endDate: end_date, outputPath: output_path }),
 
-  async get30DayAverage(): Promise<number> { return invoke<number>("get_30_day_average"); },
+  get30DayAverage: () => call<number>("get_30_day_average"),
 
   // ─── Autostart ────────────────────────────────────────────────────────────
   setAutostart: async (enabled: boolean): Promise<void> => {

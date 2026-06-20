@@ -7,7 +7,7 @@ import type { Settings } from "../types";
 export default function SettingsPage() {
   const {
     settings,
-    fetchSettings,
+    fetchSettings, 
     updateSettings,
     refreshAll,
     fetchAppList,
@@ -85,7 +85,7 @@ export default function SettingsPage() {
   if (!local) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-slide-up">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
 
       {/* Tracking */}
       <SettingsSection title="Tracking">
@@ -164,7 +164,6 @@ export default function SettingsPage() {
             onClick={resetTrackingData}
             className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${pendingReset === "reset"
                 ? "border-yellow-500 text-yellow-400 bg-yellow-500/10"
-                // : "border-wt-border hover:bg-wt-border"
                 : "border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
               }`}
           >

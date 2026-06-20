@@ -5,18 +5,25 @@ import { api } from "../utils/api";
 import { formatDuration } from "../utils/helpers";
 
 const COUNTDOWN_SECONDS = 30;
+ 
+// Mirrors the PWA_SCHEME constant in src-tauri/src/browser_pwa.rs. Browser
+// PWAs are stable-identified this way; everything else is a plain exe path.
+const PWA_SCHEME = "wintrack-pwa://";
 
 export default function SoftLockPage() {
   const params = new URLSearchParams(window.location.search);
   const appId = Number.parseInt(params.get("appId") ?? "0", 10);
+  const identifier = params.get("identifier") ?? "";
   const processName = params.get("process") ?? "";
   const initialAppName = params.get("app") ?? "This application";
   const currentUsage = Number.parseInt(params.get("currentUsage") ?? "0", 10);
   const dailyLimit = Number.parseInt(params.get("dailyLimit") ?? "0", 10);
+  const isPwa = identifier.startsWith(PWA_SCHEME);
 
   const [appName, setAppName] = useState(initialAppName);
   const [iconData, setIconData] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const actionStarted = useRef(false);
 
   useEffect(() => {
@@ -41,18 +48,29 @@ export default function SoftLockPage() {
     await getCurrentWindow().close();
   };
 
+  // Manual "Close App" click. This is allowed to attempt closing the app
+  // for any app type, including PWAs - the backend only ever closes the
+  // specific PWA window (never the whole browser), or reports failure.
   const closeTargetApp = async () => {
     if (actionStarted.current) return;
     actionStarted.current = true;
 
     try {
       if (processName) {
-        await api.closeProcess(processName);
+        await api.closeProcess(identifier, processName);
       }
+      await closeWarningWindow();
     } catch (err) {
       console.error("Failed to close app:", err);
-    } finally {
-      await closeWarningWindow();
+      // Could not safely close (most likely a PWA whose window couldn't be
+      // located). Never fall back to a destructive action - leave the
+      // warning up so the user can retry, wait it out, or take +5 minutes.
+      actionStarted.current = false;
+      setCloseError(
+        isPwa
+          ? "Couldn't close this app's window automatically. You can close it yourself, or take 5 more minutes."
+          : "Couldn't close this app automatically. You can close it yourself, or take 5 more minutes."
+      );
     }
   };
 
@@ -79,8 +97,14 @@ export default function SoftLockPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // On countdown expiry: auto-close is only safe for apps we can target by
+  // process (Win32/UWP). For browser PWAs, closing "the process" means the
+  // entire browser - every window, tab, and profile - so we never do that
+  // automatically. The warning simply stays up; the user must choose
+  // "Close App" (targeted close) or "+5 minutes" themselves.
   useEffect(() => {
     if (countdown !== 0 || actionStarted.current) return;
+    if (isPwa) return;
     void closeTargetApp();
   }, [countdown]);
 
@@ -127,13 +151,19 @@ export default function SoftLockPage() {
 
           <div className="rounded-lg border border-wt-accent/60 bg-wt-accent/10 px-6 py-5 text-center">
             <p className="mb-2 text-xs font-medium uppercase tracking-wider text-wt-muted">
-              Closing in
+              {isPwa ? "Please close manually" : "Closing in"}
             </p>
             <p className="text-5xl font-bold text-wt-accent">
-              {countdown}
+              {isPwa ? "—" : countdown}
             </p>
           </div>
         </div>
+
+        {closeError && (
+          <div className="mb-4 w-full max-w-xl rounded-lg border border-wt-accent/40 bg-wt-accent/10 px-4 py-3 text-center text-sm text-wt-text">
+            {closeError}
+          </div>
+        )}
 
         <div className="flex w-full max-w-xl flex-col gap-3 sm:flex-row">
           <button

@@ -14,7 +14,7 @@ export function formatDurationVerbose(seconds: number): string {
   if (h > 0) return `${h} hr ${m} min`;
   if (m > 0) return `${m} min ${s} sec`;
   return `${s} sec`;
-}
+} 
 
 export function getWeekStart(date: Date = new Date()): string {
   const d = new Date(date);
@@ -100,8 +100,18 @@ export function todayString(): string {
   return new Date().toLocaleDateString("en-CA");
 }
 
+// Parses a "YYYY-MM-DD" string as local midnight (not UTC) so that
+// subtracting days and re-formatting never crosses a timezone boundary.
+// `new Date("YYYY-MM-DD")` parses as UTC midnight, which combined with
+// local .setDate()/.toLocaleDateString() calls is the classic source of
+// off-by-one-day bugs for any user not at UTC+0.
+function parseLocalDateString(date: string): Date {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, (month ?? 1) - 1, day ?? 1);
+}
+
 export function subtractDays(date: string, days: number): string {
-  const d = new Date(date);
+  const d = parseLocalDateString(date);
   d.setDate(d.getDate() - days);
   return d.toLocaleDateString("en-CA");
 }

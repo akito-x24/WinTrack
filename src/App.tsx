@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense, lazy } from "react";
 import { useStore } from "./store";
 import Sidebar from "./components/layout/Sidebar";
 import Header from "./components/layout/Header";
@@ -8,10 +8,15 @@ import WeeklyAnalytics from "./pages/WeeklyAnalytics";
 import MonthlyAnalytics from "./pages/MonthlyAnalytics";
 import AppBreakdown from "./pages/AppBreakdown";
 import TimelineView from "./pages/TimelineView";
-import SettingsPage from "./pages/SettingsPage";
-import ExportCenter from "./pages/ExportCenter";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import SoftLockPage from "./pages/SoftLockPage";
+import { LoadingSpinner } from "./components/ui";
+
+// Not needed on first paint and don't share Recharts with the analytics
+// pages, so they're split into their own chunks rather than bundled with
+// the default Dashboard route.
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const ExportCenter = lazy(() => import("./pages/ExportCenter"));
 
 export default function App() {
   const { view, refreshAll, fetchSettings, fetchAppList } = useStore();
@@ -76,12 +81,14 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-wt-bg text-wt-text font-sans">
+    <div className="flex h-screen bg-fp-bg text-fp-text font-sans">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-6">
-          {renderPage()}
+          <Suspense fallback={<LoadingSpinner />}>
+            {renderPage()}
+          </Suspense>
         </main>
       </div>
     </div>

@@ -25,6 +25,11 @@ pub fn handle_tray_event(app: &AppHandle, id: &str) {
         }
         "quit" => {
             log::info!("Quitting WinTrack");
+            if let Some(state) =
+                app.try_state::<std::sync::Arc<std::sync::Mutex<crate::services::AppState>>>()
+            {
+                crate::monitoring::flush_session_for_exit(&state);
+            }
             std::process::exit(0);
         }
         _ => {}

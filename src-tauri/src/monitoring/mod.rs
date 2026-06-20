@@ -10,8 +10,8 @@ use tauri_plugin_notification::NotificationExt;
 
 #[cfg(target_os = "windows")]
 use windows::{
-    core::{PCWSTR, PWSTR},
-    Win32::Foundation::{CloseHandle, PROPERTYKEY},
+    core::{BOOL, PCWSTR, PWSTR},
+    Win32::Foundation::{CloseHandle, HWND, LPARAM, PROPERTYKEY},
     Win32::Graphics::Gdi::{
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     },
@@ -26,7 +26,8 @@ use windows::{
         IPropertyStore, PSGetPropertyKeyFromName, SHGetPropertyStoreForWindow,
     },
     Win32::UI::WindowsAndMessaging::{
-        GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+        EnumWindows, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+        IsWindowVisible, PostMessageW, WM_CLOSE,
     },
 };
 
@@ -229,6 +230,146 @@ fn get_window_app_user_model_id(hwnd: windows::Win32::Foundation::HWND) -> Optio
     }
 }
 
+// ─── Targeted PWA window close (never taskkill /IM the whole browser) ─────
+//
+// PWAs are tracked as logical apps but physically run as ordinary top-level
+// windows inside the shared browser process (chrome.exe / msedge.exe /
+// brave.exe). Soft lock must only ever affect the window(s) belonging to the
+// specific PWA whose limit was hit - never the browser process as a whole,
+// which would also close every unrelated tab, window, and profile.
+//
+// Strategy: enumerate top-level visible windows owned by the target browser
+// process, re-resolve each one's PWA identity from its own title + AppUserModelID
+// (the same heuristic used for foreground tracking), and post WM_CLOSE only to
+// the windows whose resolved identifier matches the target PWA. If none can be
+// confidently matched, nothing is closed - callers must not fall back to
+// killing the process.
+
+#[cfg(target_os = "windows")]
+struct PwaWindowSearch {
+    target_identifier: String,
+    browser: BrowserKind,
+    matched: Vec<HWND>,
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn enum_pwa_windows_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    let search = &mut *(lparam.0 as *mut PwaWindowSearch);
+
+    if !IsWindowVisible(hwnd).as_bool() {
+        return BOOL(1);
+    }
+
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if pid == 0 {
+        return BOOL(1);
+    }
+
+    let exe_path = match process_executable_path(pid) {
+        Some(path) => path,
+        None => return BOOL(1),
+    };
+    let exe_name = std::path::Path::new(&exe_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    if BrowserKind::from_process_name(&exe_name) != Some(search.browser) {
+        return BOOL(1);
+    }
+
+    let mut title_buf = [0u16; 512];
+    let title_len = GetWindowTextW(hwnd, &mut title_buf);
+    let window_title = if title_len > 0 {
+        String::from_utf16_lossy(&title_buf[..title_len as usize])
+    } else {
+        String::new()
+    };
+
+    let app_user_model_id = get_window_app_user_model_id(hwnd);
+
+    if let Some(pwa) = resolve_browser_pwa(
+        search.browser,
+        &exe_path,
+        app_user_model_id.as_deref(),
+        &window_title,
+    ) {
+        if pwa.stable_identifier == search.target_identifier {
+            search.matched.push(hwnd);
+        }
+    }
+
+    BOOL(1)
+}
+
+#[cfg(target_os = "windows")]
+fn process_executable_path(pid: u32) -> Option<String> {
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut path_buf = [0u16; 1024];
+        let mut path_len = path_buf.len() as u32;
+        let success = QueryFullProcessImageNameW(
+            process,
+            PROCESS_NAME_WIN32,
+            PWSTR(path_buf.as_mut_ptr()),
+            &mut path_len,
+        );
+        let _ = CloseHandle(process);
+
+        if success.is_err() || path_len == 0 {
+            return None;
+        }
+
+        Some(String::from_utf16_lossy(&path_buf[..path_len as usize]))
+    }
+}
+
+/// Attempts to close only the window(s) belonging to a specific browser PWA.
+///
+/// Returns `Ok(true)` if at least one matching window was found and asked to
+/// close, `Ok(false)` if no matching window could be identified (in which
+/// case the caller must NOT fall back to killing the browser process), and
+/// `Err` only for unexpected platform errors.
+#[cfg(target_os = "windows")]
+pub fn close_browser_pwa_windows(pwa_identifier: &str, process_name: &str) -> anyhow::Result<bool> {
+    let browser = BrowserKind::from_process_name(process_name)
+        .ok_or_else(|| anyhow::anyhow!("'{}' is not a recognized browser process", process_name))?;
+
+    let mut search = PwaWindowSearch {
+        target_identifier: pwa_identifier.to_string(),
+        browser,
+        matched: Vec::new(),
+    };
+
+    unsafe {
+        let _ = EnumWindows(
+            Some(enum_pwa_windows_proc),
+            LPARAM(&mut search as *mut PwaWindowSearch as isize),
+        );
+    }
+
+    if search.matched.is_empty() {
+        return Ok(false);
+    }
+
+    for hwnd in search.matched {
+        unsafe {
+            // WM_CLOSE asks the window (and the tab/app inside it) to close
+            // itself gracefully, exactly like clicking its own close button.
+            // This never touches sibling windows, tabs, or browser profiles.
+            let _ = PostMessageW(Some(hwnd), WM_CLOSE, windows::Win32::Foundation::WPARAM(0), LPARAM(0));
+        }
+    }
+
+    Ok(true)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn close_browser_pwa_windows(_pwa_identifier: &str, _process_name: &str) -> anyhow::Result<bool> {
+    Ok(false)
+}
+
 #[cfg(not(target_os = "windows"))]
 pub fn get_foreground_app() -> Option<ForegroundApp> {
     Some(ForegroundApp {
@@ -278,7 +419,6 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
             let (poll_ms, idle_threshold_secs, is_paused) = {
                 match state.lock() {
                     Ok(s) => (
-                        // s.db.get_polling_interval() as u64,
                         s.db.get_polling_interval().max(1000) as u64,
                         s.db.get_idle_threshold() * 60,
                         s.paused,
@@ -457,6 +597,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                                 &handle,
                                                 app_id,
                                                 &display_name,
+                                                &app.executable_path,
                                                 &app.process_name,
                                                 total_usage,
                                                 limit_seconds,
@@ -482,6 +623,18 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                     s.current_app = current_app.as_ref().map(|a| a.app_name.clone());
                     s.session_start = session_start_str.clone();
                     s.is_idle = is_idle;
+
+                    s.pending_session = match (&current_app, &session_start, &session_start_str) {
+                        (Some(app), Some(start), Some(start_str)) if !is_idle => {
+                            Some(crate::services::PendingSession {
+                                app: app.clone(),
+                                started_at: *start,
+                                started_at_str: start_str.clone(),
+                            })
+                        }
+                        _ => None,
+                    };
+
                     consecutive_fails = 0;
                 }
                 Err(_) => {
@@ -501,15 +654,17 @@ fn open_soft_lock_window(
     handle: &AppHandle,
     app_id: i64,
     app_name: &str,
+    identifier: &str,
     process_name: &str,
     current_usage_seconds: i64,
     daily_limit_seconds: i64,
     monitor_bounds: Option<MonitorBounds>,
 ) -> tauri::Result<()> {
     let url = format!(
-        "/?softlock=1&appId={}&app={}&process={}&currentUsage={}&dailyLimit={}",
+        "/?softlock=1&appId={}&app={}&identifier={}&process={}&currentUsage={}&dailyLimit={}",
         app_id,
         urlencoding::encode(app_name),
+        urlencoding::encode(identifier),
         urlencoding::encode(process_name),
         current_usage_seconds,
         daily_limit_seconds
@@ -554,34 +709,60 @@ fn flush_session(
         (current_app, session_start, session_start_str)
     {
         let duration = start.elapsed().as_secs() as i64;
-        if duration < 1 {
-            return;
-        }
+        write_session(state, app, start_str, duration, was_idle);
+    }
+}
 
-        let end_str = Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+fn write_session(
+    state: &Arc<Mutex<AppState>>,
+    app: &ForegroundApp,
+    start_str: &str,
+    duration: i64,
+    was_idle: bool,
+) {
+    if duration < 1 {
+        return;
+    }
 
-        if let Ok(s) = state.lock() {
-            match s.db.upsert_app(&app.app_name, &app.executable_path) {
-                Ok((app_id, is_ignored)) => {
-                    if !is_ignored {
-                        let _ = s.db.insert_session(
-                            app_id,
-                            &app.window_title,
-                            start_str,
-                            &end_str,
-                            duration,
-                            was_idle,
-                        );
-                        log::debug!(
-                            "Flushed: {} ({}s idle={})",
-                            app.app_name,
-                            duration,
-                            was_idle
-                        );
-                    }
+    let end_str = Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+
+    if let Ok(s) = state.lock() {
+        match s.db.upsert_app(&app.app_name, &app.executable_path) {
+            Ok((app_id, is_ignored)) => {
+                if !is_ignored {
+                    let _ = s.db.insert_session(
+                        app_id,
+                        &app.window_title,
+                        start_str,
+                        &end_str,
+                        duration,
+                        was_idle,
+                    );
+                    log::debug!(
+                        "Flushed: {} ({}s idle={})",
+                        app.app_name,
+                        duration,
+                        was_idle
+                    );
                 }
-                Err(e) => log::error!("Failed to upsert app: {}", e),
             }
+            Err(e) => log::error!("Failed to upsert app: {}", e),
         }
+    }
+}
+
+/// Flushes whatever session is currently in progress, for use by hard-exit
+/// paths (tray "Exit", app shutdown) that don't have access to the
+/// monitoring thread's local state. Safe to call multiple times - if there's
+/// nothing pending, or it's too short to record, this is a no-op.
+pub fn flush_session_for_exit(state: &Arc<Mutex<AppState>>) {
+    let pending = match state.lock() {
+        Ok(mut s) => s.pending_session.take(),
+        Err(_) => return,
+    };
+
+    if let Some(pending) = pending {
+        let duration = pending.started_at.elapsed().as_secs() as i64;
+        write_session(state, &pending.app, &pending.started_at_str, duration, false);
     }
 }
