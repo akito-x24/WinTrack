@@ -81,7 +81,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-fp-bg text-fp-text font-sans">
+    <div className="flex h-screen bg-wt-bg text-wt-text font-sans">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
