@@ -83,7 +83,7 @@ All tables are created on first run. Additional indices (e.g. on timestamps) are
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/wintrack.git
+git clone https://github.com/akito-x24/wintrack.git
 cd wintrack
 
 # 2. Install frontend dependencies
