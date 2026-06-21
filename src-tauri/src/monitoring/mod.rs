@@ -413,7 +413,7 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
         let mut session_start_str: Option<String> = None;
         let mut consecutive_fails: u32 = 0;
 
-        println!("WinTrack monitoring loop started");
+        // println!("WinTrack monitoring started");
 
         loop {
             let (poll_ms, idle_threshold_secs, is_paused) = {
@@ -546,11 +546,6 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                                 s.db.mark_limit_notification_sent(app_id, &today);
 
                                             let _ = s.db.mark_reminder_sent(app_id, total_usage);
-
-                                            println!(
-                                                "REAL-TIME LIMIT NOTIFICATION: {}",
-                                                display_name
-                                            );
                                         }
 
                                         let reminder_interval =
@@ -581,8 +576,6 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                                     .show();
 
                                             let _ = s.db.mark_reminder_sent(app_id, total_usage);
-
-                                            println!("REAL-TIME REMINDER: {}", display_name);
                                         }
 
                                         if total_usage >= effective_limit_seconds
@@ -591,8 +584,6 @@ pub fn start_monitoring_loop(state: Arc<Mutex<AppState>>, handle: AppHandle) {
                                             && handle.get_webview_window("soft-lock").is_none()
                                             && s.mark_soft_lock_active(app_id)
                                         {
-                                            println!("SOFT LOCK TRIGGERED: {}", display_name);
-
                                             let result = open_soft_lock_window(
                                                 &handle,
                                                 app_id,
