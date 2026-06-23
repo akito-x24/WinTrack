@@ -23,7 +23,7 @@ If you find WinTrack useful, consider giving it a ⭐ on GitHub - it genuinely h
 - **Weekly Analytics** - usage trends over time
 ![Weekly Analytics](src/assets/weekly.png)
 
- **Monthly Analytics** - usage trends over time
+- **Monthly Analytics** - usage trends over time
 ![Monthly Analytics](src/assets/monthly.png)
 
 - **App Breakdown** - per-app categories, limits, and reminders
