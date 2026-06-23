@@ -1,261 +1,308 @@
-# WinTrack 🎯
+# WinTrack
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6.svg)](#getting-started)
+[![Built with Tauri](https://img.shields.io/badge/Built%20with-Tauri-24C8DB.svg)](https://tauri.app/)
 
-**Executive Summary:** WinTrack is a privacy-first Windows screen time tracker built with Tauri (Rust backend + React/TypeScript frontend). It runs fully offline (no cloud or telemetry) and monitors application usage in real time. WinTrack lets you set daily usage limits, receive reminders, and view detailed analytics to understand and improve your digital habits. It is lightweight (<150 MB RAM) and designed for performance on Windows PCs.
+> Track application usage, understand your digital habits, and stay in control of your screen time - all with local-first privacy.
 
-## Key Features
+WinTrack is a Windows desktop application usage analytics tool built with **Tauri (Rust backend)** and **React + TypeScript frontend**, with **SQLite** for local persistence. It tracks foreground application activity - including browser PWAs and UWP/Store apps - stores everything locally, and gives you daily, weekly, monthly, timeline, and heatmap views into how you actually spend time on your PC.
 
-- **Real-time Usage Tracking:** Monitors the foreground window using Win32 APIs and logs active sessions into SQLite. Discards very short sessions (<1 sec) or idle time.
-- **Idle Detection:** Detects mouse/keyboard inactivity and pauses tracking when the user is idle.
-- **Categories & Focus Streaks:** Automatically or manually categorize apps (e.g. Social, Productivity). Tracks “focus streaks” (consecutive days meeting usage goals) for motivation.
-- **Analytics Dashboards:** Built-in daily, weekly, monthly views with charts (heatmaps, bar charts, pie charts) and usage breakdowns.
-- **Custom Usage Goals & Reminders:** Set a daily usage goal (time limit). After reaching it, WinTrack shows configurable reminders or warnings.
-- **Soft-Lock Enforcement:** (In development) After warnings, WinTrack can enforce a “soft lock” period during which limiting apps are blocked from reopening.
-- **PWA / Browser App Tracking (Planned):** Future support for treating Progressive Web Apps (e.g. YouTube, ChatGPT PWAs) as separate tracked apps instead of lumping them under `chrome.exe` or `msedge.exe`.
-- **System Tray & Autostart:** Runs in the system tray; can hide on close. Optionally launch on Windows startup via registry.
-- **Data Export & Backup:** Export data as CSV/JSON. Automatic daily database backup to `%APPDATA%\WinTrack\` ensures persistence.
-- **Fully Offline & Local:** All data is stored locally in a SQLite database. No internet calls or telemetry. You control your data.
+If you find WinTrack useful, consider giving it a ⭐ on GitHub - it genuinely helps the project get noticed.
 
-## Architecture Overview
+---
 
-WinTrack is split into two main parts: a **Rust backend** (under `src-tauri/`) and a **React/TypeScript frontend** (under `src/`):
+## Screenshots
 
-- **Backend (Rust + Tauri):** Handles Windows monitoring and data storage.  
-  - `src-tauri/monitoring/`: Core loop using Win32 APIs (`GetForegroundWindow`, `GetWindowTextW`, `GetLastInputInfo`, etc.) to detect active app and idle status.  
-  - `src-tauri/database/`: SQLite schema definitions, migrations, and query functions using `rusqlite`. Ensures the database is initialized on startup.  
-  - `src-tauri/services/`: Manages the application state (`AppState`) including settings and focus/usage data.  
-  - `src-tauri/tray/`: Manages the system tray icon and menu (show/hide window, exit).  
-  - `src-tauri/analytics/`: Computes derived stats like streaks or aggregates for the frontend.  
-  - `src-tauri/lib.rs`: Tauri entrypoint; it defines and registers all Tauri commands (e.g. for queries and actions from the frontend) and starts the app.  
-  - The backend runs the monitoring loop on a separate thread and communicates with the frontend via Tauri IPC commands.
+> _Screenshots coming soon._
 
-- **Frontend (React + TypeScript):** Provides the user interface.  
-  - Uses **Vite** for fast development and build, and **Tailwind CSS** for styling.  
-  - `src/pages/`: React pages (Dashboard, DailyAnalytics, WeeklyAnalytics, TimelineView, SettingsPage, etc.) displaying charts and settings.  
-  - `src/components/`: Reusable UI components like charts (using **Recharts**), tables, and layout elements.  
-  - `src/store/`: **Zustand** global state for UI state (e.g. current date range, filter settings).  
-  - `src/utils/api.ts`: Bridges to the backend via `@tauri-apps/api`. Contains functions like `invoke("commandName")` to call Rust Tauri commands.  
-  - The frontend communicates with the backend by calling Tauri commands (e.g. fetch sessions, update settings).
+<!-- Add screenshots here once available, e.g.: -->
+<!-- ![Dashboard](docs/screenshots/dashboard.png) -->
+<!-- ![Weekly Analytics](docs/screenshots/weekly.png) -->
+<!-- ![Timeline View](docs/screenshots/timeline.png) -->
+<!-- ![Hourly Heatmap](docs/screenshots/heatmap.png) -->
+<!-- ![Soft Lock Warning](docs/screenshots/softlock.png) -->
 
-### Important Files and Directories
+Planned screenshots:
 
-| File/Folder             | Purpose                                                                                        |
-|-------------------------|------------------------------------------------------------------------------------------------|
-| `src-tauri/lib.rs`      | Tauri app entry: sets up window, system tray, and registers commands (with `tauri::generate_handler!`). |
-| `src-tauri/monitoring/`  | Windows monitoring code: detects active window and idle state to log usage sessions.           |
-| `src-tauri/database/`   | Defines SQLite schema, runs migrations, and provides query functions for data access.          |
-| `src-tauri/services/`   | Initializes and manages shared `AppState` (settings, in-memory state, etc.).                  |
-| `src-tauri/tray/`       | Handles the system tray icon/menu and interactions (hide/show window, exit, etc.).            |
-| `src/` (frontend)       | React frontend files (all under the `src/` directory).                                       |
-| `src/pages/`            | React pages (e.g. `Dashboard.tsx`, `DailyAnalytics.tsx`, etc.) — main UI screens.             |
-| `src/components/`       | Reusable UI components (charts, cards, modals, etc.).                                       |
-| `src/utils/api.ts`      | Frontend API: wraps Tauri `invoke`/`call` to Rust commands (e.g. `updateAppSettings`).        |
-| `src/store/`            | Zustand store definitions for managing UI state.                                            |
-| `package.json` & `tsconfig.json` | Frontend config (scripts, dependencies, TypeScript).                               |
-| `src-tauri/Cargo.toml`  | Rust backend config (dependencies like `rusqlite`, `windows`, Tauri).                         |
-| `tauri.conf.json`       | Tauri configuration (window settings, permissions).                                         |
+- **Dashboard** - at-a-glance daily summary and weekly trend
+- **Weekly / Monthly Analytics** - usage trends over time
+- **Timeline View** - chronological session-by-session breakdown
+- **Hourly Heatmap** - when during the day you're most active
+- **App Breakdown** - per-app categories, limits, and reminders
+- **Soft Lock Warning** - the fullscreen screen shown when a daily limit is reached
 
-### Database Schema
+---
 
-WinTrack uses a SQLite database located by default at `%APPDATA%\WinTrack\wintrack.db`. The main tables and key columns are:
+## Demo
 
-| Table             | Key Columns                                         | Description                                                 |
-|-------------------|-----------------------------------------------------|-------------------------------------------------------------|
-| **apps**          | `id`, `app_name`, `executable_path`, `category`, `icon_data`, `first_seen` | Registered applications. Stores display names, file paths, categories, and icon data. |
-| **usage_sessions**| `id`, `app_id`, `window_title`, `start_time`, `end_time`, `duration_seconds`, `was_idle` | Logs each usage session (time spent on an app window).     |
-| **settings**      | `id`, `polling_interval_ms`, `idle_threshold_minutes`, `launch_on_startup`, `start_minimized`, `notification_enabled`, `daily_goal_minutes` | Application preferences (e.g. tracking intervals, daily goal). |
-| **migrations**    | `name`, `applied_at`                                | Tracks which database schema migrations have been applied.  |
+> _A short demo GIF/recording will be added here._
 
-All tables are created on first run. Additional indices (e.g. on timestamps) are handled in the schema to optimize queries. The app auto-applies migrations on startup if the schema is outdated.
+<!-- ![Demo](docs/screenshots/demo.gif) -->
 
-## Getting Started (Developer Setup)
+---
+
+## Why WinTrack?
+
+Most screen-time tools either ship your usage data to a server, lump every browser tab under one generic "Chrome" entry, or stop at showing you a chart with no way to actually act on it.
+
+WinTrack was built to do better on all three counts:
+
+- **Everything stays on your machine.** There's no account, no cloud sync, and no telemetry - usage data is sensitive, and the only way to guarantee it stays private is to never let it leave your device in the first place.
+- **It tells apps apart properly.** A YouTube Progressive Web App and a work-related PWA both technically run inside `chrome.exe` - WinTrack resolves each one back to its real identity instead of tracking "Chrome" as one undifferentiated blob. The same applies to UWP/Microsoft Store apps hosted by generic system processes.
+- **It can actually intervene, not just report.** Daily limits, recurring reminders, and a fullscreen soft-lock warning mean WinTrack can nudge you when a limit is hit - without ever resorting to anything as blunt as force-closing your entire browser.
+
+It's a personal project, actively used and iterated on, not a polished commercial product - see [Roadmap](#roadmap) and [FAQ](#faq) for where it currently has rough edges.
+
+---
+
+## Features
+
+### Usage Tracking
+
+- Real-time foreground window detection via Win32 APIs
+- Process identification, including resolving UWP/Store apps hosted by generic system processes (`ApplicationFrameHost.exe`, `RuntimeBroker.exe`) back to their real app identity
+- Browser PWA detection - Chrome, Edge, and Brave PWAs (e.g. a YouTube, Spotify, Twitter or Instagram PWA) are tracked as their own distinct apps, not lumped under the browser
+- Idle detection that pauses tracking after a configurable period of inactivity
+- All sessions logged locally to SQLite
+
+### Analytics
+
+- Daily, weekly, and monthly usage views
+- Timeline view - a chronological log of every tracked session
+- Hourly heatmap of activity throughout the day
+- Top application summaries
+- 30-day rolling average
+
+### App Controls
+
+- Custom categories (Productive, Development, Study, Social, Entertainment, Gaming, Tools, Other)
+- Custom display names per app
+- Ignore toggle to exclude specific apps from tracking entirely
+- Per-app daily usage limits (in 15-minute increments)
+- Recurring reminder notifications once a limit is exceeded
+- Soft-lock enforcement: a fullscreen warning when a daily limit is reached, with the option to take 5 more minutes or close the app. For browser PWAs, closing targets only that PWA's own window - never the entire browser, its other windows, tabs, or profiles.
+
+### Export
+
+- Export usage sessions to **CSV** or **JSON**
+- Choose any custom date range, or use quick presets (last 7 / 30 / 90 days)
+
+---
+
+## Privacy
+
+WinTrack is local-first by design - this matters more for a usage tracker than almost any other category of app, since the data involved is a direct record of your behavior.
+
+- **All data is stored locally**, in a single SQLite database - nothing is synced anywhere.
+- **No cloud sync.** There is no server component at all.
+- **No telemetry.** No analytics, crash reporting, or update-check pings of any kind.
+- **No account required.** There's nothing to sign up for or sign into.
+- **No data leaves your device**, ever, under any feature.
+- **Open source.** Every Tauri command and SQL query is visible in this repository - there's no hidden behavior to take on faith.
+
+---
+
+## Installation
+
+### For most users
+
+Download the latest installer from the [GitHub Releases](https://github.com/akito-x24/WinTrack/releases) page and run it.
+
+- Windows installer: `.exe` (NSIS)
+
+### For developers
+
+See [Getting Started](#getting-started) below to build from source instead.
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- **Windows 10/11**: Required for Win32 API monitoring.  
-- **Node.js & npm**: Install [Node.js (v16+)](https://nodejs.org/). npm comes with Node.  
-- **Rust & Cargo**: Install [Rust](https://rustup.rs/) (stable channel).  
-- **Tauri CLI**: Install via `cargo install tauri-cli`.  
-- **Git**: For cloning and version control.
+- **Windows 10 or 11** - required; WinTrack depends on Win32 APIs with no cross-platform equivalent.
+- **Node.js and npm** - [Node.js](https://nodejs.org/) v18+ recommended.
+- **Rust and Cargo** - via [rustup](https://rustup.rs/), stable channel.
+- **Git**
 
-### Clone and Install
+### Install
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/akito-x24/wintrack.git
-cd wintrack
-
-# 2. Install frontend dependencies
+git clone https://github.com/akito-x24/WinTrack.git
+cd WinTrack
 npm install
 ```
 
-### Running in Development Mode
+### Development
 
-- **Frontend only (browser mode):**  
-  ```bash
-  npm run dev
-  ```  
-  Starts the React UI at [http://localhost:1420](http://localhost:1420) (hot reload). Useful for UI work with mock data.
+- **Full desktop app (recommended):**
 
-- **Tauri App (desktop dev):**  
   ```bash
   npm run tauri dev
-  ```  
-  Builds and launches the Windows desktop app. This runs both Rust and the UI. Any Rust code changes require restarting this. The window will appear; close to tray if configured.
-
-> **Note:** The UI will display mock or empty data until the Rust backend is running. Running `npm run tauri dev` ensures full functionality.
-
-### Build for Production
-
-1. **Frontend build:**  
-   ```bash
-   npm run build
-   ```
-   This compiles TypeScript and bundles the frontend into `dist/`.
-
-2. **Tauri package:**  
-   ```bash
-   npm run tauri build
-   ```
-   Generates a Windows installer (e.g. NSIS) in `src-tauri/target/release/bundle/`. For example: `WinTrack_vX.Y.Z_x64-setup.exe`.
-
-### Common Commands
-
-| Command                     | Description                                                        |
-|-----------------------------|--------------------------------------------------------------------|
-| `npm install`               | Install Node.js dependencies.                                      |
-| `npm run dev`               | Run the frontend web UI (Vite dev server).                         |
-| `npm run tauri dev`         | Run the full Tauri app (desktop) in dev mode.                      |
-| `npm run build`             | Build the frontend for production (TypeScript compile & bundle).   |
-| `npm run tauri build`       | Package the production Windows app installer (Tauri build).        |
-| `cargo check`               | Check Rust code for errors without building (quick feedback).      |
-| `cargo clippy --fix --allow-dirty --allow-staged` | Lint and auto-fix Rust code (requires Rust nightly or toolchain). |
-| `cargo fmt -- --check`      | Check Rust code formatting (or run without `--check` to format).  |
-| `npm run lint` *(if configured)* | (Optional) Lint frontend code (ESLint) if set up.               |
-
-> **Note:** Running `npm run tauri build` automatically runs `npm run build` internally.
-
-### Testing
-
-- **Rust Tests:** Implement unit tests in `src-tauri/` as needed, then run `cargo test`.  
-- **Frontend Tests:** Set up Jest/React Testing Library as needed (not included by default). You can add `npm test` once tests are configured.
-
-## Usage Examples
-
-- Set a daily goal and category in the **Settings** page.  
-- View your usage in the **Dashboard** (today’s total and streak) or **Daily/Weekly** analytics pages.  
-- When you exceed your goal, WinTrack will (eventually) show a warning and then start a soft-lock period (if enabled).  
-- Export your data from **Settings** to CSV/JSON at any time.
-
-## Example Code Snippets
-
-#### Database Migration Example (Rust)
-
-```rust
-// Example: Add a new column to 'apps' if it doesn't exist
-let count: i64 = self.conn.query_row(
-    "SELECT COUNT(*) FROM pragma_table_info('apps') WHERE name='new_field'",
-    [],
-    |r| r.get(0),
-)?;
-if count == 0 {
-    self.conn.execute_batch("ALTER TABLE apps ADD COLUMN new_field TEXT DEFAULT ''")?;
-    log::info!("Migration: added apps.new_field column");
-}
-```
-
-#### Tauri Command Example (Rust)
-
-```rust
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}!", name)
-}
-
-tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![greet])
-    .run(tauri::generate_context!())
-    .expect("error while running Tauri application");
-```
-
-#### Calling Tauri from React (TypeScript)
-
-```tsx
-import { invoke } from '@tauri-apps/api/tauri';
-
-async function sayHello() {
-  try {
-    const response: string = await invoke('greet', { name: 'World' });
-    console.log(response); // prints "Hello, World!"
-  } catch (error) {
-    console.error('Error invoking Tauri command:', error);
-  }
-}
-```
-
-## Contribution Guidelines
-
-We welcome contributions! Please follow these guidelines:
-
-- **Branching:** Use feature branches named like `feature/<feature-name>` or `bugfix/<issue>`.  
-- **Commit Messages:** Use [Conventional Commits](https://www.conventionalcommits.org/) style. For example:  
-  - `feat: add daily usage reminder notification`  
-  - `fix: resolve unclosed delimiter error in database module`  
-  - `docs: update README with new setup instructions`  
-- **Pull Requests:** Open a PR with a clear title and description. Link any related issue.  
-- **Code Style:**  
-  - Rust: Run `cargo fmt` and `cargo clippy` before committing. Keep code idiomatic.  
-  - TypeScript: Format consistently (e.g. with Prettier) and ensure code compiles (`npm run build`).  
-- **Testing:** Include tests for new functionality when possible. Ensure all existing functionality still works (`cargo test`, manual checks).
-
-## Troubleshooting
-
-- **Rust compile error “unclosed delimiter”:** Often caused by mismatched `{}` braces. Check recent edits for missing or extra braces, especially around commented blocks. The error location (filename:line) will hint where a closing `}` is missing.
-- **Stray `Ok(())` or syntax errors outside functions:** This can occur if a function or block was partially commented out. Re-examine recent changes (e.g. any `//` or removed lines) and restore or remove leftover lines.
-- **Database migration errors:** If the schema gets out of sync, you may see SQL errors on startup. Try deleting or resetting the database (`wintrack.db` in `%APPDATA%\WinTrack`) to force a fresh schema creation. Ensure the `migrations` table is intact.
-- **Reverting experimental changes:** A branch `backup/copilot-half-finished` contains the code state before removing the Copilot-generated feature. You can restore or compare code from that branch if needed:
-  ```bash
-  git checkout backup/copilot-half-finished
   ```
-- **Development Build Issues:** If `npm run tauri dev` fails, try running `cargo clean` and then rebuilding. Ensure you have the required Rust toolchain (`stable`), and that `@tauri-apps/cli` is installed (`cargo install tauri-cli`).
 
-## Changelog (Major Updates)
+  Runs the actual Tauri app with the real Rust backend. Restart this command after Rust changes; frontend changes hot-reload.
 
-- **v0.1.0 (Initial Release):** Core functionality: foreground app tracking, idle detection, session logging, and basic dashboard analytics.  
-- **v0.2.0:** Added app categorization, focus streak tracking, CSV/JSON export, and improvements to the UI.  
-- **v1.0.0:** Stable release with performance optimizations, system tray support, autostart, and polished UX.  
-- **(Experimental):** Implemented and later refactored out a “Limit Warning” feature prototype using Copilot (see backup branch).  
-- **vX.Y.Z (TBD):** Future work like PWA/browser integration and full-screen enforcement to be added.
+- **Frontend only (browser mode):**
 
-*(For detailed commit history, see the Git repository.)*
+  ```bash
+  npm run dev
+  ```
+
+  Starts the React UI alone at [http://localhost:1420](http://localhost:1420). Useful for UI-only work, but features that depend on the Tauri backend (tracking, soft lock, tray, exports) won't function in this mode.
+
+---
+
+## Build
+
+```bash
+npm run build        # compiles TypeScript and bundles the frontend into dist/
+npm run tauri build  # packages the production Windows installer
+```
+
+`npm run tauri build` runs `npm run build` internally, so you don't need to run both separately. The installer is produced under `src-tauri/target/release/bundle/`.
+
+### Other useful commands
+
+| Command | Description |
+|---|---|
+| `cargo check` (from `src-tauri/`) | Quick Rust error check without a full build. |
+| `cargo test` (from `src-tauri/`) | Runs the Rust unit test suite. |
+| `cargo clippy` (from `src-tauri/`) | Rust lints. |
+| `cargo fmt` (from `src-tauri/`) | Rust formatting. |
+
+---
+
+## Tech Stack
+
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Recharts, Zustand
+- **Backend:** Rust, Tauri v2, Win32 APIs, SQLite (via `rusqlite`)
+- **Desktop integration:** Tauri v2 plugins for autostart, notifications, shell, and dialogs
+
+---
+
+## Architecture
+
+WinTrack is split into a **Rust backend** (`src-tauri/`) and a **React/TypeScript frontend** (`src/`), communicating entirely through Tauri's IPC command layer.
+
+### Backend (Rust + Tauri)
+
+- **`src-tauri/src/monitoring/`** - The core polling loop, run on its own thread. Uses Win32 APIs (`GetForegroundWindow`, `GetWindowTextW`, `GetLastInputInfo`, `GetWindowThreadProcessId`, and more) to detect the active window, resolve UWP host processes back to their real app via `AppUserModelID`, resolve browser PWAs via `browser_pwa`, track idle state, and flush completed sessions to the database. Also owns the soft-lock window lifecycle and the logic that safely closes a single PWA's window without touching the rest of the browser.
+- **`src-tauri/src/browser_pwa.rs`** - Identifies installed Chrome/Edge/Brave PWAs and produces a stable identifier used wherever a PWA needs to be tracked, limited, or closed. Has its own unit test suite (`cargo test`).
+- **`src-tauri/src/database/`** - SQLite schema, additive migrations (checked idempotently before each `ALTER TABLE`, so they're safe to run against an already-migrated database), and all query/aggregation functions.
+- **`src-tauri/src/services/`** - Owns the shared, mutex-guarded `AppState`: settings cache, pause flag, soft-lock bookkeeping, and the in-progress session mirror used to flush usage data on exit so no session is lost when the app closes or the user signs out.
+- **`src-tauri/src/export/`** - CSV/JSON export for a given date range.
+- **`src-tauri/src/tray/`** - System tray icon, menu (Open, Pause Tracking, Resume Tracking, Exit), and their handlers.
+- **`src-tauri/src/lib.rs`** - Tauri entrypoint. Registers every Tauri command, builds the tray and main window, and wires up exit handling.
+
+### Frontend (React + TypeScript)
+
+- Built with **Vite**, styled with **Tailwind CSS**.
+- **`src/pages/`** - One component per screen: `Dashboard`, `DailyAnalytics`, `WeeklyAnalytics`, `MonthlyAnalytics`, `AppBreakdown`, `TimelineView`, `SettingsPage`, `ExportCenter`, and `SoftLockPage` (rendered in its own dedicated window, not the main app shell).
+- **`src/components/charts/`** - Recharts-based and custom chart components (weekly bar chart, hourly heatmap, category pie chart).
+- **`src/store/`** - A single Zustand store holding fetched stats, settings, and the current view.
+- **`src/utils/api.ts`** - Thin wrapper over `@tauri-apps/api`'s `invoke`, the single bridge point between the UI and every Rust command.
+
+### Important Files and Directories
+
+| File / Folder | Purpose |
+|---|---|
+| `src-tauri/src/lib.rs` | Tauri entrypoint: window/tray setup, command registration, exit handling. |
+| `src-tauri/src/monitoring/mod.rs` | Foreground/idle detection loop, UWP resolution, soft-lock window management. |
+| `src-tauri/src/browser_pwa.rs` | PWA detection and identifier resolution for Chrome/Edge/Brave. |
+| `src-tauri/src/database/mod.rs` | Schema, migrations, and all SQL queries. |
+| `src-tauri/src/services/mod.rs` | Shared `AppState`. |
+| `src-tauri/src/export/mod.rs` | CSV/JSON export. |
+| `src-tauri/src/tray/mod.rs` | Tray icon, menu, and tray actions. |
+| `src/pages/` | One file per screen - the main UI surfaces. |
+| `src/components/` | Charts and shared UI primitives. |
+| `src/utils/api.ts` | Frontend-to-backend bridge (`invoke`). |
+| `src/store/index.ts` | Zustand store. |
+| `src-tauri/Cargo.toml` | Rust dependencies. |
+| `src-tauri/tauri.conf.json` | Window, bundle, and installer configuration. |
+
+### Database Schema
+
+WinTrack uses a single SQLite database at a fixed path:
+
+```
+C:\ProgramData\WinTrack\Database\wintrack.db
+```
+
+| Table | Key Columns | Notes |
+|---|---|---|
+| `apps` | `id`, `app_name`, `display_name`, `executable_path`, `category`, `icon_data`, `is_ignored`, `daily_limit_minutes`, `reminder_interval_minutes`, `soft_lock_enabled`, `first_seen` | One row per tracked app - a Win32 exe path, a UWP `AppUserModelID`, or a stable PWA identifier. |
+| `usage_sessions` | `id`, `app_id`, `window_title`, `start_time`, `end_time`, `duration_seconds`, `was_idle` | One row per completed foreground session. |
+| `settings` | `id`, `polling_interval_ms`, `idle_threshold_minutes`, `launch_on_startup`, `start_minimized`, `notification_enabled`, `daily_goal_minutes` | Singleton settings row. |
+| `migrations` | `name`, `applied_at` | Tracks which schema migrations have already been applied. |
+
+All tables are created on first run; migrations are additive only and safe to re-run.
+
+---
+
+## Performance Snapshot
+
+Measured on Windows using Resource Monitor and Task Manager during normal use:
+
+- Approximately **5 MB** private memory usage
+- Up to **64 MB** working set, depending on foreground/background state
+- Below **0.2% CPU** utilization during continuous background execution
+- **0 B/s** network traffic during monitoring - consistent with WinTrack making no network calls at all
+- Used by **25+** people during real-world testing and feedback-driven iteration
+
+These figures come from informal profiling on the author's own setup rather than a controlled benchmark suite, and will vary by machine.
+
+---
 
 ## Roadmap
 
-- **Browser/PWA Detection:** Identify Progressive Web Apps (PWAs) and treat them as separate apps (e.g. YouTube PWA instead of `chrome.exe`). Use AppUserModelIDs, shortcuts or registry to detect installed PWAs.  
-- **Fullscreen Enforcement:** Display a dedicated warning window and countdown when a usage limit is reached. Allow granting a 5-minute extension or enforcing app closure.  
-- **Soft-Lock Relaunch Protection:** If a soft-lock is active, intercept app relaunch and show a lock screen or close it. (Currently, WinTrack prevents new sessions via the flag but does not intercept relaunch.)  
-- **Further Features:** Possible pomodoro mode, website tracking (via browser extension), multi-monitor support, and data import from other services.
+- Broader, more robust browser/PWA detection
+- Further-improved soft-lock behavior
+- Additional analytics filters and summaries
+- A more refined first-run onboarding and setup flow
+- Automated database backups (the underlying backup logic already exists but isn't yet wired into the UI)
 
-## Security & Privacy
+---
 
-- **Local-Only Storage:** All data is stored in a local SQLite file (`%APPDATA%\WinTrack\wintrack.db`). No data is sent over the internet.  
-- **No Telemetry:** WinTrack does not include any analytics or crash-reporting services. All processing is done locally in Rust.  
-- **Open Source:** You can inspect every Rust command and SQL query. No hidden behavior.  
-- **Permissions:** The app only requires necessary Windows permissions (foreground window, registry access for autostart) and nothing more.
+## FAQ
 
-## How We Built It
+**Does WinTrack work offline?**
+Yes, entirely. WinTrack makes no network requests of any kind - tracking, analytics, exports, and settings all run fully offline, all the time.
 
-WinTrack was developed using a Rust backend with the Tauri framework and a React + TypeScript frontend. We began by implementing the core monitoring loop in Rust, using the Windows API to detect active applications. We incrementally added features like the analytics dashboard, daily goals, and focus streaks. The React UI was developed using Vite and Tailwind for rapid iteration.
+**Does it upload my data anywhere?**
+No. There is no server, no account, and no sync feature. Every piece of data WinTrack collects stays in the local SQLite database on your machine, for as long as you keep it there.
 
-During development, we experimented with GitHub Copilot to draft new features. For example, a Copilot session generated a partial “limit warning” feature (including a new window and database schema changes). We carefully reviewed this output, ultimately refactoring and removing incomplete parts to keep the code clean. (The pre-cleanup code is preserved in the `backup/copilot-half-finished` branch for reference.)
+**Can I exclude specific apps from being tracked?**
+Yes - any app can be marked as ignored from the App Breakdown page, and it will be excluded from tracking and all analytics going forward.
 
-**Success Criteria:** A completed WinTrack should build and run on Windows, accurately track usage, and meet performance targets (under ~150 MB RAM and minimal CPU usage). The features should function as specified: tracking & analytics working, daily limits notifying correctly, and settings/persistence reliable. Future success will include adding planned roadmap features while maintaining stability and privacy.
+**Will WinTrack track every app correctly?**
+Most apps are detected reliably out of the box. Browser PWAs and UWP/Store apps are resolved through a set of heuristics (window titles, app identifiers, installed shortcuts) that cover the common cases well, but can occasionally misidentify an app - especially an unusual or newly installed one. If you run into an app that isn't tracked the way you'd expect, please open an issue on GitHub or reach out directly; reports like this directly shape what gets fixed next.
 
-## License & Credits
+**Where is the database stored?**
+Locally, at `C:\ProgramData\WinTrack\Database\wintrack.db`. This path is shared across all Windows user accounts on the machine.
 
-WinTrack is open-source software. The project is currently **assumed to be MIT licensed** – please verify or replace with your chosen license. All contributions are welcome under this license. For more details, see the [LICENSE](LICENSE) file or contact the maintainers.
+---
 
-**Credits:** This project was built with [Tauri](https://tauri.app/), [Rust](https://www.rust-lang.org/), [React](https://reactjs.org/), and [SQLite](https://sqlite.org/). Thank you to all contributors and the open-source community. 
+## Contributing
 
-*Please confirm any placeholders or assumptions (like the exact license or version numbers) before finalizing.*
+1. Fork the repository.
+2. Create a feature branch.
+3. Commit your changes.
+4. Open a pull request.
+
+Before submitting a PR:
+
+- Run `cargo fmt` and `cargo clippy` for any Rust changes.
+- Run `npm run build` to confirm the frontend still type-checks and builds.
+- Run `cargo test` to confirm the existing test suite still passes.
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for the full text.
+
+---
+
+**Built with:** [Tauri](https://tauri.app/), [Rust](https://www.rust-lang.org/), [React](https://reactjs.org/), and [SQLite](https://sqlite.org/) (via `rusqlite`).
