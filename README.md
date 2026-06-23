@@ -20,8 +20,10 @@ If you find WinTrack useful, consider giving it a ⭐ on GitHub - it genuinely h
 - **Hourly Heatmap** - when during the day you're most active
 ![Hourly Heatmap](src/assets/heatmap.png)
 
-- **Weekly / Monthly Analytics** - usage trends over time
+- **Weekly Analytics** - usage trends over time
 ![Weekly Analytics](src/assets/weekly.png)
+
+ **Monthly Analytics** - usage trends over time
 ![Monthly Analytics](src/assets/monthly.png)
 
 - **App Breakdown** - per-app categories, limits, and reminders
@@ -38,16 +40,6 @@ If you find WinTrack useful, consider giving it a ⭐ on GitHub - it genuinely h
 
 - **Soft Lock Warning** - the fullscreen screen shown when a daily limit is reached
 ![Soft Lock Warning](src/assets/softlock.png)
-
----
-
-## Demo
-
-> _A short demo GIF/recording will be added here._
-
-<!-- ![Demo](docs/screenshots/demo.gif) -->
-
----
 
 ## Why WinTrack?
 
