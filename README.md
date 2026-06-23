@@ -14,23 +14,30 @@ If you find WinTrack useful, consider giving it a ⭐ on GitHub - it genuinely h
 
 ## Screenshots
 
-> _Screenshots coming soon._
-
-<!-- Add screenshots here once available, e.g.: -->
-<!-- ![Dashboard](docs/screenshots/dashboard.png) -->
-<!-- ![Weekly Analytics](docs/screenshots/weekly.png) -->
-<!-- ![Timeline View](docs/screenshots/timeline.png) -->
-<!-- ![Hourly Heatmap](docs/screenshots/heatmap.png) -->
-<!-- ![Soft Lock Warning](docs/screenshots/softlock.png) -->
-
-Planned screenshots:
-
 - **Dashboard** - at-a-glance daily summary and weekly trend
-- **Weekly / Monthly Analytics** - usage trends over time
-- **Timeline View** - chronological session-by-session breakdown
+![Dashboard](src/assets/dashboard.png)
+
 - **Hourly Heatmap** - when during the day you're most active
+![Hourly Heatmap](src/assets/heatmap.png)
+
+- **Weekly / Monthly Analytics** - usage trends over time
+![Weekly Analytics](src/assets/weekly.png)
+![Monthly Analytics](src/assets/monthly.png)
+
 - **App Breakdown** - per-app categories, limits, and reminders
+![App Breakdown](src/assets/appbreakdown.png)
+
+- **Timeline View** - chronological session-by-session breakdown
+![Timeline View](src/assets/timeline.png)
+
+- **Export Page** - export your usage data to CSV or JSON for any date range
+![Export Page](src/assets/export.png)
+
+- **Settings Page** - configure polling interval, idle threshold, and autostart behavior
+![Settings Page](src/assets/settings.png)
+
 - **Soft Lock Warning** - the fullscreen screen shown when a daily limit is reached
+![Soft Lock Warning](src/assets/softlock.png)
 
 ---
 
